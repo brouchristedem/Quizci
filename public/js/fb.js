@@ -8,7 +8,7 @@ export * from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js"
 
 export const ADMIN_EMAIL = "brouchristedem@gmail.com";
 // Numéro WhatsApp admin, format international sans "+" (ex: 2250700000000). Vide = le teacher choisit le contact.
-export const ADMIN_WHATSAPP = "";
+export const ADMIN_WHATSAPP = "2250545177571";
 export const PRIX = 500;
 export const MAX_QUESTIONS = 20;
 
