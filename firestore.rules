@@ -1,0 +1,70 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isAdmin() {
+      return signedIn()
+        && request.auth.token.email == 'brouchristedem@gmail.com'
+        && request.auth.token.email_verified == true;
+    }
+    function quiz(id) {
+      return get(/databases/$(database)/documents/quizzes/$(id)).data;
+    }
+    function isOwner(id) {
+      return signedIn() && quiz(id).ownerId == request.auth.uid;
+    }
+
+    match /quizzes/{quizId} {
+      allow read: if isAdmin()
+        || (signedIn() && resource.data.ownerId == request.auth.uid)
+        || resource.data.statut in ['actif', 'en_cours', 'termine'];
+
+      allow create: if signedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.statut == 'brouillon';
+
+      allow update: if isAdmin()
+        || (signedIn()
+            && resource.data.ownerId == request.auth.uid
+            && request.resource.data.ownerId == resource.data.ownerId
+            && (
+              (resource.data.statut == 'brouillon'
+                && request.resource.data.statut == 'brouillon')
+              ||
+              (resource.data.statut in ['actif', 'en_cours']
+                && request.resource.data.statut in ['actif', 'en_cours', 'termine'])
+            ));
+
+      allow delete: if isAdmin()
+        || (signedIn() && resource.data.ownerId == request.auth.uid
+            && resource.data.statut == 'brouillon');
+
+      match /questions/{qId} {
+        allow read: if isAdmin() || isOwner(quizId)
+          || quiz(quizId).statut in ['actif', 'en_cours'];
+        allow write: if isAdmin()
+          || (isOwner(quizId) && quiz(quizId).statut == 'brouillon');
+      }
+
+      // Bonnes réponses : jamais visibles par les joueurs
+      match /private/{docId} {
+        allow read, write: if isAdmin() || isOwner(quizId);
+      }
+
+      match /players/{playerId} {
+        allow read: if isAdmin() || isOwner(quizId)
+          || (signedIn() && request.auth.uid == playerId);
+        allow create: if signedIn()
+          && request.auth.uid == playerId
+          && quiz(quizId).statut in ['actif', 'en_cours']
+          && request.resource.data.score == 0;
+        allow update: if isAdmin() || isOwner(quizId)
+          || (signedIn() && request.auth.uid == playerId
+              && request.resource.data.diff(resource.data)
+                   .affectedKeys().hasOnly(['reponse', 'reponseAt']));
+        allow delete: if isAdmin() || isOwner(quizId);
+      }
+    }
+  }
+}

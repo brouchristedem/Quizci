@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quizci · Teacher</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+<div class="wrap wide">
+  <div class="row" style="justify-content:space-between">
+    <a href="host" class="logo" style="color:#fff;text-decoration:none">Quiz<b>ci</b></a>
+    <button id="out" class="sec hide">Déconnexion</button>
+  </div>
+
+  <!-- Connexion -->
+  <div id="login" class="card center hide">
+    <h2>Espace teacher</h2>
+    <p class="muted">Connecte-toi pour créer et lancer tes quiz.</p>
+    <button id="gbtn">Se connecter avec Google</button>
+    <div id="lerr" class="err hide"></div>
+  </div>
+
+  <!-- Tableau de bord -->
+  <div id="dash" class="hide">
+    <div class="row"><h2 class="grow">Mes quiz</h2><button id="new">+ Nouveau quiz</button></div>
+    <div id="list"></div>
+  </div>
+
+  <!-- Création -->
+  <div id="create" class="hide">
+    <h2>Nouveau quiz</h2>
+    <div class="card">
+      <p class="muted">1. Télécharge le modèle, remplis-le (Word, Bloc-notes…), puis importe-le en PDF, ou colle le texte directement.</p>
+      <div class="row"><button id="tpl" class="sec">Télécharger le modèle</button><input id="pdf" type="file" accept="application/pdf" class="grow"></div>
+      <textarea id="txt" placeholder="TITRE: Mon quiz&#10;TEMPS: 20&#10;&#10;Q1: Ma question ?&#10;A) ...&#10;B) ...&#10;REPONSE: A"></textarea>
+      <div class="row"><button id="parse">Analyser</button><button id="cancel" class="sec">Annuler</button></div>
+      <div id="cerr" class="err hide"></div>
+    </div>
+    <div id="preview" class="hide">
+      <div class="card"><h3 id="ptitle"></h3><p class="muted" id="pmeta"></p>
+        <div id="pq"></div>
+        <button id="save" class="ok">Enregistrer le quiz</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Partie -->
+  <div id="game" class="hide"></div>
+</div>
+
+<script type="module">
+import { auth, db, $, esc, COULEURS, LETTRES, ADMIN_WHATSAPP, PRIX,
+  GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged,
+  collection, query, where, orderBy, getDoc, getDocs, addDoc, updateDoc, deleteDoc, writeBatch, setDoc, doc, onSnapshot, serverTimestamp } from "./js/fb.js";
+import { parseQuiz, MODELE } from "./js/parser.js";
+
+if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+const show = (id) => ["login", "dash", "create", "game"].forEach((k) => $("#" + k).classList.toggle("hide", k !== id));
+let user = null, unsubList = null, parsed = null;
+const gameId = new URLSearchParams(location.search).get("quiz");
+
+$("#gbtn").onclick = () => signInWithPopup(auth, new GoogleAuthProvider()).catch((e) => { $("#lerr").textContent = e.message; $("#lerr").classList.remove("hide"); });
+$("#out").onclick = () => signOut(auth);
+
+onAuthStateChanged(auth, (u) => {
+  if (unsubList) { unsubList(); unsubList = null; }
+  user = u && !u.isAnonymous ? u : null;
+  $("#out").classList.toggle("hide", !user);
+  if (!user) { show("login"); return; }
+  if (gameId) { runGame(gameId); return; }
+  show("dash");
+  unsubList = onSnapshot(query(collection(db, "quizzes"), where("ownerId", "==", user.uid)), (s) => drawList(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
+});
+
+/* ---------- Tableau de bord ---------- */
+function waLink(q) {
+  const msg = `Bonjour, je veux activer mon quiz « ${q.titre} » (ID : ${q.id.slice(0, 8)}) sur Quizci. Montant : ${PRIX} F.`;
+  return `https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent(msg)}`;
+}
+function drawList(list) {
+  list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+  $("#list").innerHTML = list.length ? list.map((q) => `
+    <div class="card"><div class="row"><div class="grow"><b>${esc(q.titre)}</b><br><span class="muted">${q.nbQuestions} questions · ${q.temps}s</span></div>
+      <span class="badge ${q.statut}">${{ brouillon: "En attente de paiement", actif: "Actif", en_cours: "En cours", termine: "Terminé" }[q.statut]}</span></div>
+      <div class="row" style="margin-top:10px">
+        ${q.statut === "brouillon" ? `<a class="btn ok" target="_blank" href="${waLink(q)}">Activer mon quiz (${PRIX} F) via WhatsApp</a><button class="ko" data-del="${q.id}">Supprimer</button>` : ""}
+        ${["actif", "en_cours"].includes(q.statut) ? `<span class="muted">PIN : <b>${q.pin}</b></span><a class="btn ok" href="host?quiz=${q.id}">${q.statut === "actif" ? "Lancer la partie" : "Reprendre"}</a>` : ""}
+      </div></div>`).join("") : `<div class="card muted">Aucun quiz pour l'instant. Clique sur « Nouveau quiz ».</div>`;
+  document.querySelectorAll("[data-del]").forEach((b) => b.onclick = async () => { if (confirm("Supprimer ce quiz ?")) await deleteDoc(doc(db, "quizzes", b.dataset.del)); });
+}
+
+/* ---------- Création ---------- */
+$("#new").onclick = () => { $("#txt").value = ""; $("#preview").classList.add("hide"); $("#cerr").classList.add("hide"); show("create"); };
+$("#cancel").onclick = () => show("dash");
+$("#tpl").onclick = () => {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([MODELE], { type: "text/plain;charset=utf-8" }));
+  a.download = "modele-quizci.txt"; a.click();
+};
+
+async function pdfToText(file) {
+  const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+  const lines = [];
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const tc = await (await pdf.getPage(p)).getTextContent();
+    let cur = "", lastY = null;
+    for (const it of tc.items) {
+      const y = it.transform[5];
+      if (lastY !== null && Math.abs(y - lastY) > 3) { lines.push(cur); cur = ""; }
+      cur += it.str; lastY = y;
+      if (it.hasEOL) { lines.push(cur); cur = ""; lastY = null; }
+    }
+    if (cur) lines.push(cur);
+  }
+  return lines.join("\n");
+}
+
+$("#pdf").onchange = async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  const err = $("#cerr"); err.classList.add("hide");
+  try {
+    const t = await pdfToText(f);
+    if (t.trim().length < 20) throw new Error("Aucun texte lisible : c'est peut-être un PDF scanné. Colle le texte à la main.");
+    $("#txt").value = t;
+    $("#parse").click();
+  } catch (x) { err.textContent = "Lecture du PDF impossible : " + x.message; err.classList.remove("hide"); }
+};
+
+$("#parse").onclick = () => {
+  parsed = parseQuiz($("#txt").value);
+  const err = $("#cerr");
+  err.classList.toggle("hide", parsed.erreurs.length === 0);
+  err.innerHTML = parsed.erreurs.map(esc).join("<br>");
+  const ok = parsed.questions.length > 0;
+  $("#preview").classList.toggle("hide", !ok);
+  if (!ok) return;
+  $("#ptitle").textContent = parsed.titre || "(sans titre)";
+  $("#pmeta").textContent = `${parsed.questions.length} questions · ${parsed.temps} secondes par question`;
+  $("#pq").innerHTML = parsed.questions.map((q, i) => `<div style="margin:12px 0"><b>${i + 1}. ${esc(q.texte)}</b>${q.choix.map((c, k) => `<div class="${k === q.bonne ? "good" : "muted"}">${LETTRES[k]}) ${esc(c)} ${k === q.bonne ? "✓" : ""}</div>`).join("")}</div>`).join("");
+  $("#save").disabled = parsed.erreurs.length > 0;
+};
+
+$("#save").onclick = async () => {
+  const b = $("#save"); b.disabled = true;
+  try {
+    const titre = parsed.titre || "Quiz sans titre";
+    const ref = await addDoc(collection(db, "quizzes"), {
+      ownerId: user.uid, ownerName: user.displayName || "", ownerEmail: user.email || "",
+      titre, temps: parsed.temps, nbQuestions: parsed.questions.length, statut: "brouillon", createdAt: serverTimestamp(),
+    });
+    const batch = writeBatch(db);
+    parsed.questions.forEach((q, i) => batch.set(doc(db, "quizzes", ref.id, "questions", String(i).padStart(2, "0")), { ordre: i, texte: q.texte, choix: q.choix }));
+    batch.set(doc(db, "quizzes", ref.id, "private", "answers"), { bonnes: parsed.questions.map((q) => q.bonne) });
+    await batch.commit();
+    show("dash");
+  } catch (e) { console.error(e); alert("Erreur : " + e.message); b.disabled = false; }
+};
+
+/* ---------- Partie (écran de projection) ---------- */
+async function runGame(id) {
+  show("game");
+  const g = $("#game");
+  const qref = doc(db, "quizzes", id);
+  const snap = await getDoc(qref);
+  if (!snap.exists() || snap.data().ownerId !== user.uid) { g.innerHTML = `<div class="card err">Quiz introuvable.</div>`; return; }
+  let quiz = snap.data();
+  if (!["actif", "en_cours"].includes(quiz.statut)) { g.innerHTML = `<div class="card">Ce quiz n'est pas actif. <a href="host" style="color:#fff">Retour</a></div>`; return; }
+
+  const questions = (await getDocs(query(collection(qref, "questions"), orderBy("ordre")))).docs.map((d) => d.data());
+  const bonnes = (await getDoc(doc(qref, "private", "answers"))).data().bonnes;
+  const limit = (quiz.temps || 20) * 1000;
+  let phase = quiz.phase || "lobby", idx = quiz.qIndex ?? -1, players = [], qStartSrv = null, qStartLocal = Date.now(), timerH = null, built = null;
+
+  onSnapshot(qref, (s) => { const d = s.data(); if (d?.qStart?.toMillis) qStartSrv = d.qStart.toMillis(); });
+
+  onSnapshot(collection(qref, "players"), (s) => {
+    players = s.docs.map((d) => ({ id: d.id, ...d.data() }));
+    players.sort((a, b) => (a.joinedAt?.toMillis?.() || 0) - (b.joinedAt?.toMillis?.() || 0));
+    const seen = new Set();
+    for (const p of players) {
+      let k = (p.pseudo || "").toLowerCase();
+      if (seen.has(k)) {
+        let n = 2; while (seen.has(`${p.pseudo} ${n}`.toLowerCase())) n++;
+        p.pseudo = `${p.pseudo} ${n}`.slice(0, 18); k = p.pseudo.toLowerCase();
+        updateDoc(doc(qref, "players", p.id), { pseudo: p.pseudo }).catch(() => {});
+      }
+      seen.add(k);
+    }
+    draw();
+    if (phase === "question" && players.length && players.every((p) => p.reponse?.q === idx && p.reponseAt)) endQuestion();
+  });
+
+  const nbRep = () => players.filter((p) => p.reponse?.q === idx).length;
+  const podium = () => [...players].sort((a, b) => (b.score || 0) - (a.score || 0));
+
+  function draw() {
+    const q = questions[idx];
+    if (phase === "lobby") {
+      if (built !== "lobby") {
+        built = "lobby";
+        const url = `${location.origin}/?pin=${quiz.pin}`;
+        g.innerHTML = `<div class="center"><h1>${esc(quiz.titre)}</h1>
+          <p class="muted" style="font-size:1.4rem">Va sur <b style="color:#fff">${location.host}</b> et entre le PIN</p>
+          <div class="pin">${quiz.pin}</div>
+          <div style="margin:18px auto;width:216px;background:#fff;padding:8px;border-radius:12px" id="qr"></div>
+          <div class="chips" id="chips" style="justify-content:center"></div>
+          <p><button id="start" class="ok" style="font-size:1.4rem;padding:18px 40px">Démarrer</button></p></div>`;
+        if (window.QRCode) new QRCode($("#qr"), { text: url, width: 200, height: 200 });
+        $("#start").onclick = () => startQuestion(0);
+      }
+      $("#chips").innerHTML = players.map((p) => `<span class="chip">${esc(p.pseudo)}<button data-k="${p.id}" title="Exclure">✕</button></span>`).join("") || `<span class="muted">En attente des joueurs…</span>`;
+      $("#chips").querySelectorAll("[data-k]").forEach((b) => b.onclick = () => deleteDoc(doc(qref, "players", b.dataset.k)));
+      $("#start").disabled = players.length === 0;
+      return;
+    }
+    built = null;
+    if (phase === "question") {
+      const left = Math.max(0, Math.ceil((limit - (Date.now() - qStartLocal)) / 1000));
+      g.innerHTML = `<div class="row" style="justify-content:space-between"><span class="muted">Question ${idx + 1}/${questions.length}</span><div class="timer" id="tm">${left}</div><span class="muted">${nbRep()}/${players.length} réponses</span></div>
+        <div class="qtxt center" style="margin:20px 0">${esc(q.texte)}</div>
+        <div class="choices">${q.choix.map((c, k) => `<div class="choice ${COULEURS[k]}"><small>${LETTRES[k]}</small> ${esc(c)}</div>`).join("")}</div>
+        <p class="center"><button id="skip" class="sec">Terminer la question</button></p>`;
+      $("#skip").onclick = endQuestion;
+      return;
+    }
+    if (phase === "result") {
+      const bonne = bonnes[idx];
+      const cnt = q.choix.map((_, k) => players.filter((p) => p.reponse?.q === idx && p.reponse.c === k).length);
+      const mx = Math.max(1, ...cnt);
+      g.innerHTML = `<div class="qtxt center" style="margin:10px 0 20px">${esc(q.texte)}</div>
+        <div class="choices">${q.choix.map((c, k) => `<div class="choice ${COULEURS[k]} ${k === bonne ? "right" : "dim"}"><small>${LETTRES[k]}</small> ${esc(c)} ${k === bonne ? "✓" : ""}</div>`).join("")}</div>
+        <div class="card" style="margin-top:16px">${cnt.map((n, k) => `<div class="bar"><i class="${COULEURS[k]}" style="width:${(n / mx) * 100}%;background:var(--${COULEURS[k]})"></i><span>${LETTRES[k]} · ${n}</span></div>`).join("")}</div>
+        <p class="center"><button id="lb">Classement</button></p>`;
+      $("#lb").onclick = showLeaderboard;
+      return;
+    }
+    if (phase === "leaderboard") {
+      const top = podium().slice(0, 5);
+      g.innerHTML = `<h1 class="center">Classement</h1>${top.map((p, i) => `<div class="lb"><span>${i + 1}. ${esc(p.pseudo)}</span><span>${p.score || 0}</span></div>`).join("")}
+        <p class="center"><button id="nx">${idx + 1 < questions.length ? "Question suivante" : "Voir le podium"}</button></p>`;
+      $("#nx").onclick = next;
+      return;
+    }
+    if (phase === "podium") {
+      const top = podium().slice(0, 3);
+      g.innerHTML = `<h1 class="center">🏆 Podium</h1>${top.map((p, i) => `<div class="lb p${i + 1}"><span>${i + 1}. ${esc(p.pseudo)}</span><span>${p.score || 0} pts</span></div>`).join("")}
+        <p class="center"><a class="btn" href="host">Terminer</a></p>`;
+    }
+  }
+
+  async function startQuestion(i) {
+    idx = i; phase = "question"; qStartLocal = Date.now(); qStartSrv = null;
+    await updateDoc(qref, { statut: "en_cours", phase, qIndex: i, qStart: serverTimestamp(), correct: null });
+    draw();
+    clearInterval(timerH);
+    timerH = setInterval(() => {
+      const left = Math.max(0, Math.ceil((limit - (Date.now() - qStartLocal)) / 1000));
+      const t = $("#tm"); if (t) t.textContent = left;
+      if (left <= 0) endQuestion();
+    }, 250);
+  }
+
+  async function endQuestion() {
+    if (phase !== "question") return;
+    phase = "result"; clearInterval(timerH);
+    const bonne = bonnes[idx];
+    const start = qStartSrv ?? qStartLocal;
+    const res = players.map((p) => {
+      const r = p.reponse, t = p.reponseAt?.toMillis?.();
+      const ok = !!(r && r.q === idx && t && r.c === bonne);
+      const el = Math.min(limit, Math.max(0, (t ?? start + limit) - start));
+      const pts = ok ? Math.round(1000 * (1 - el / limit / 2)) : 0;
+      return { id: p.id, ok, pts, score: (p.score || 0) + pts };
+    });
+    const sorted = [...res].sort((a, b) => b.score - a.score);
+    for (let i = 0; i < res.length; i += 400) {
+      const b = writeBatch(db);
+      res.slice(i, i + 400).forEach((r) => b.update(doc(qref, "players", r.id), { score: r.score, last: r.pts, ok: r.ok, lastQ: idx, rank: sorted.findIndex((x) => x.id === r.id) + 1 }));
+      await b.commit().catch((e) => console.error(e));
+    }
+    await updateDoc(qref, { phase, correct: bonne });
+    draw();
+  }
+
+  async function showLeaderboard() { phase = "leaderboard"; await updateDoc(qref, { phase }); draw(); }
+
+  async function next() {
+    if (idx + 1 < questions.length) return startQuestion(idx + 1);
+    phase = "podium"; await updateDoc(qref, { phase, statut: "termine" }); draw();
+  }
+
+  // Reprise après rafraîchissement : si une question était en cours, on la relance avec le temps complet
+  if (phase === "question") startQuestion(idx); else draw();
+}
+</script>
+</body>
+</html>

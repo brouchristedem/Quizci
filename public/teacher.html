@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quizci – Espace enseignant</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<main class="wrap">
+  <div class="brand">Quizci</div>
+
+  <section id="t-load" class="view center"><p class="muted">Chargement…</p></section>
+
+  <section id="t-login" class="view card center" hidden>
+    <h1>Espace enseignant</h1>
+    <p class="muted">Crée ton quiz, active-le, et lance la partie en classe.</p>
+    <button id="t-login-btn" class="btn">Se connecter avec Google</button>
+    <a href="index.html" class="link">← Je suis un joueur</a>
+  </section>
+
+  <section id="t-list" class="view" hidden>
+    <div class="top">
+      <span class="muted" id="t-user"></span>
+      <button id="t-out" class="btn sec sm" type="button">Déconnexion</button>
+    </div>
+    <button id="t-new" class="btn" type="button">+ Créer un quiz</button>
+    <h2>Mes quiz</h2>
+    <div id="t-cards"></div>
+  </section>
+
+  <section id="t-edit" class="view" hidden>
+    <div class="top"><h1>Nouveau quiz</h1><button id="e-cancel" class="btn sec sm" type="button">Annuler</button></div>
+
+    <div class="card">
+      <label class="muted">Titre du quiz</label>
+      <input id="e-title" maxlength="100" placeholder="Ex : Quiz de géographie">
+      <label class="muted" style="display:block;margin-top:12px">Temps par question (secondes)</label>
+      <input id="e-time" type="number" min="5" max="120" value="20">
+    </div>
+
+    <div class="card">
+      <b>Importer tes questions</b>
+      <p class="muted">Remplis le <a href="modele-quizci.txt" download>modèle</a> (Word, Bloc-notes…), exporte-le en PDF, puis importe-le ici.</p>
+      <input id="e-pdf" type="file" accept="application/pdf">
+      <p class="muted" style="margin-top:12px">Ou colle directement ton texte (même format) :</p>
+      <textarea id="e-paste" rows="5" placeholder="TITRE: ...&#10;Q1: ...&#10;A) ...&#10;B) ...&#10;REPONSE: A"></textarea>
+      <button id="e-parse" class="btn sec" type="button">Analyser le texte</button>
+    </div>
+
+    <div id="e-warn"></div>
+
+    <div class="top"><h2 style="margin:0">Questions</h2><span class="muted" id="e-count"></span></div>
+    <div id="e-list"></div>
+    <button id="e-add" class="btn sec" type="button">+ Ajouter une question</button>
+    <button id="e-save" class="btn" type="button">Enregistrer le quiz</button>
+  </section>
+</main>
+<script type="module" src="js/teacher.js"></script>
+</body>
+</html>

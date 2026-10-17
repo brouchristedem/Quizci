@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quizci</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="wrap center">
+  <div class="logo">Quiz<b>ci</b></div>
+
+  <div id="join" class="card">
+    <h2>Rejoindre une partie</h2>
+    <input id="pin" inputmode="numeric" maxlength="6" placeholder="Code PIN">
+    <input id="pseudo" maxlength="15" placeholder="Ton pseudo">
+    <button id="go" class="full">Jouer</button>
+    <div id="jerr" class="err hide"></div>
+    <p class="muted"><a href="host" style="color:var(--mut)">Je suis teacher</a></p>
+  </div>
+
+  <div id="game" class="hide"></div>
+</div>
+
+<script type="module">
+import { auth, db, $, esc, COULEURS, LETTRES,
+  signInAnonymously, collection, query, where, getDocs, getDoc, setDoc, updateDoc, doc, onSnapshot, orderBy, serverTimestamp } from "./js/fb.js";
+
+const params = new URLSearchParams(location.search);
+if (params.get("pin")) $("#pin").value = params.get("pin");
+
+let quizId = null, quiz = null, me = null, questions = [], uid = null, pRef = null;
+let tick = null;
+const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+$("#pseudo").value = store.get("quizci_pseudo") || "";
+
+const showErr = (m) => { const e = $("#jerr"); e.textContent = m; e.classList.remove("hide"); };
+
+async function ensureAuth() {
+  await auth.authStateReady();
+  if (!auth.currentUser) await signInAnonymously(auth);
+  uid = auth.currentUser.uid;
+}
+
+async function start(id, pseudo) {
+  quizId = id;
+  const qref = doc(db, "quizzes", id);
+  pRef = doc(db, "quizzes", id, "players", uid);
+  const snap = await getDoc(pRef);
+  if (!snap.exists()) {
+    await setDoc(pRef, { pseudo, score: 0, joinedAt: serverTimestamp() });
+  }
+  questions = (await getDocs(query(collection(qref, "questions"), orderBy("ordre")))).docs.map((d) => d.data());
+  store.set("quizci_quiz", id);
+  $("#join").classList.add("hide");
+  $("#game").classList.remove("hide");
+  onSnapshot(qref, (s) => { quiz = s.data(); render(); }, () => showEnd("Partie introuvable."));
+  onSnapshot(pRef, (s) => { me = s.data(); render(); });
+}
+
+$("#go").onclick = async () => {
+  $("#jerr").classList.add("hide");
+  const pin = $("#pin").value.trim();
+  const pseudo = $("#pseudo").value.trim().slice(0, 15);
+  if (!/^\d{6}$/.test(pin)) return showErr("Le PIN contient 6 chiffres.");
+  if (pseudo.length < 2) return showErr("Choisis un pseudo (2 lettres minimum).");
+  $("#go").disabled = true;
+  try {
+    await ensureAuth();
+    const q = query(collection(db, "quizzes"), where("pin", "==", pin), where("statut", "in", ["actif", "en_cours"]));
+    const res = await getDocs(q);
+    if (res.empty) { showErr("PIN introuvable, ou le quiz n'est pas encore actif."); return; }
+    store.set("quizci_pseudo", pseudo);
+    await start(res.docs[0].id, pseudo);
+  } catch (e) {
+    console.error(e);
+    showErr("Impossible de rejoindre. Vérifie ta connexion et réessaie.");
+  } finally { $("#go").disabled = false; }
+};
+
+// Reprise automatique après un rafraîchissement
+(async () => {
+  const last = store.get("quizci_quiz");
+  if (!last) return;
+  try {
+    await ensureAuth();
+    const p = await getDoc(doc(db, "quizzes", last, "players", uid));
+    const qz = await getDoc(doc(db, "quizzes", last));
+    if (p.exists() && qz.exists() && qz.data().statut !== "termine") await start(last, p.data().pseudo);
+  } catch {}
+})();
+
+function showEnd(msg) { $("#game").innerHTML = `<div class="card"><h2>${esc(msg)}</h2></div>`; }
+
+function render() {
+  if (!quiz || !me) return;
+  clearInterval(tick);
+  const g = $("#game");
+  const head = `<div class="row" style="justify-content:space-between"><b>${esc(me.pseudo)}</b><b>${me.score || 0} pts</b></div>`;
+  const i = quiz.qIndex ?? -1;
+  const q = questions[i];
+
+  if (quiz.phase === "question" && q) {
+    const answered = me.reponse && me.reponse.q === i;
+    if (answered) { g.innerHTML = head + `<div class="card"><div class="big">✓</div><h2>Réponse envoyée</h2><p class="muted">Regarde l'écran…</p></div>`; return; }
+    const fin = Date.now() + (quiz.temps || 20) * 1000;
+    g.innerHTML = head + `<div class="card"><div class="row" style="justify-content:space-between"><span class="muted">Question ${i + 1}/${questions.length}</span><b id="t">${quiz.temps || 20}</b></div><div class="qtxt" style="font-size:1.3rem;margin-top:8px">${esc(q.texte)}</div></div>
+      <div class="choices">${q.choix.map((c, k) => `<button class="choice ${COULEURS[k]}" data-k="${k}"><small>${LETTRES[k]}</small> ${esc(c)}</button>`).join("")}</div>`;
+    g.querySelectorAll(".choice").forEach((b) => b.onclick = async () => {
+      g.querySelectorAll(".choice").forEach((x) => x.disabled = true);
+      try { await updateDoc(pRef, { reponse: { q: i, c: +b.dataset.k }, reponseAt: serverTimestamp() }); }
+      catch (e) { console.error(e); g.querySelectorAll(".choice").forEach((x) => x.disabled = false); }
+    });
+    tick = setInterval(() => {
+      const left = Math.max(0, Math.ceil((fin - Date.now()) / 1000));
+      const t = $("#t"); if (t) t.textContent = left;
+      if (left <= 0) { clearInterval(tick); g.querySelectorAll(".choice").forEach((x) => x.disabled = true); }
+    }, 250);
+    return;
+  }
+
+  if (quiz.phase === "result") {
+    if (me.lastQ !== i) { g.innerHTML = head + `<div class="card"><h2>…</h2></div>`; return; }
+    g.innerHTML = head + (me.ok
+      ? `<div class="card"><div class="big good">Bonne réponse !</div><h2>+${me.last} pts</h2></div>`
+      : `<div class="card"><div class="big" style="color:#ffb3c1">Raté</div><p class="muted">${me.reponse && me.reponse.q === i ? "Ce n'était pas la bonne réponse." : "Pas de réponse à temps."}</p></div>`)
+      + `<p class="muted">Rang : ${me.rank}</p>`;
+    return;
+  }
+
+  if (quiz.phase === "leaderboard") { g.innerHTML = head + `<div class="card"><h2>Classement</h2><div class="big">${me.rank ? me.rank + (me.rank === 1 ? "er" : "ème") : "-"}</div><p class="muted">${me.score || 0} points</p></div>`; return; }
+
+  if (quiz.phase === "podium" || quiz.statut === "termine") {
+    g.innerHTML = head + `<div class="card"><h2>Partie terminée</h2><div class="big">${me.rank ? me.rank + (me.rank === 1 ? "er" : "ème") : "-"}</div><p class="muted">${me.score || 0} points</p></div><button class="full" onclick="location.reload()">Rejouer avec un autre PIN</button>`;
+    store.set("quizci_quiz", "");
+    return;
+  }
+
+  g.innerHTML = head + `<div class="card"><h2>Tu es dans la partie !</h2><p class="muted">Regarde l'écran, ça va bientôt commencer.</p></div>`;
+}
+</script>
+</body>
+</html>

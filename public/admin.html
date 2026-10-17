@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quizci · Admin</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="wrap wide">
+  <div class="row" style="justify-content:space-between"><div class="logo">Quiz<b>ci</b> · Admin</div><button id="out" class="sec hide">Déconnexion</button></div>
+
+  <div id="login" class="card center">
+    <p>Connexion réservée à l'administrateur.</p>
+    <button id="gbtn">Se connecter avec Google</button>
+    <div id="lerr" class="err hide"></div>
+  </div>
+
+  <div id="app" class="hide">
+    <div class="stats" id="stats"></div>
+    <h2>Quiz</h2>
+    <div class="card" style="overflow-x:auto"><table id="tbl"></table></div>
+  </div>
+</div>
+
+<script type="module">
+import { auth, db, $, esc, ADMIN_EMAIL, PRIX,
+  GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged,
+  collection, query, where, getDocs, updateDoc, deleteDoc, doc, onSnapshot, serverTimestamp } from "./js/fb.js";
+
+const err = (m) => { const e = $("#lerr"); e.textContent = m; e.classList.remove("hide"); };
+$("#gbtn").onclick = () => signInWithPopup(auth, new GoogleAuthProvider()).catch((e) => err(e.message));
+$("#out").onclick = () => signOut(auth);
+
+let unsub = null;
+onAuthStateChanged(auth, (u) => {
+  if (unsub) { unsub(); unsub = null; }
+  const ok = u && !u.isAnonymous && u.email === ADMIN_EMAIL;
+  $("#login").classList.toggle("hide", !!ok);
+  $("#app").classList.toggle("hide", !ok);
+  $("#out").classList.toggle("hide", !u);
+  if (u && !ok) { err("Ce compte n'est pas administrateur."); return; }
+  if (ok) unsub = onSnapshot(collection(db, "quizzes"), (s) => draw(s.docs.map((d) => ({ id: d.id, ...d.data() }))), (e) => err(e.message));
+});
+
+const fmt = (t) => t?.toDate ? t.toDate().toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }) : "";
+
+function draw(list) {
+  list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+  const rank = { brouillon: 0, actif: 1, en_cours: 1, termine: 2 };
+  list.sort((a, b) => rank[a.statut] - rank[b.statut]);
+  const payes = list.filter((q) => q.statut !== "brouillon");
+  $("#stats").innerHTML = [
+    ["Quiz créés", list.length],
+    ["En attente de paiement", list.filter((q) => q.statut === "brouillon").length],
+    ["Quiz activés", payes.length],
+    ["Revenus estimés", (payes.length * PRIX).toLocaleString("fr-FR") + " F"],
+  ].map(([k, v]) => `<div class="stat"><span class="muted">${k}</span><b>${v}</b></div>`).join("");
+  $("#tbl").innerHTML = `<tr><th>Date</th><th>ID</th><th>Titre</th><th>Teacher</th><th>Q.</th><th>Statut</th><th>PIN</th><th></th></tr>` +
+    list.map((q) => `<tr>
+      <td>${fmt(q.createdAt)}</td><td><code>${q.id.slice(0, 8)}</code></td><td>${esc(q.titre)}</td>
+      <td>${esc(q.ownerName || "")}<br><span class="muted">${esc(q.ownerEmail || "")}</span></td><td>${q.nbQuestions || ""}</td>
+      <td><span class="badge ${q.statut}">${q.statut}</span></td><td>${esc(q.pin || "")}</td>
+      <td>${q.statut === "brouillon" ? `<button data-act="${q.id}">Rendre actif</button> <button class="ko" data-del="${q.id}">✕</button>` : ""}</td></tr>`).join("");
+  document.querySelectorAll("[data-act]").forEach((b) => b.onclick = () => activer(b.dataset.act, b));
+  document.querySelectorAll("[data-del]").forEach((b) => b.onclick = async () => {
+    if (confirm("Supprimer ce quiz ?")) await deleteDoc(doc(db, "quizzes", b.dataset.del));
+  });
+}
+
+async function activer(id, btn) {
+  if (!confirm("Paiement reçu ? Rendre ce quiz actif.")) return;
+  btn.disabled = true;
+  try {
+    let pin;
+    for (let n = 0; n < 10; n++) {
+      pin = String(Math.floor(100000 + Math.random() * 900000));
+      const dup = await getDocs(query(collection(db, "quizzes"), where("pin", "==", pin), where("statut", "in", ["actif", "en_cours"])));
+      if (dup.empty) break;
+    }
+    await updateDoc(doc(db, "quizzes", id), { statut: "actif", pin, phase: "lobby", qIndex: -1, activatedAt: serverTimestamp() });
+  } catch (e) { alert(e.message); btn.disabled = false; }
+}
+</script>
+</body>
+</html>
