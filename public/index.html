@@ -42,8 +42,8 @@
       <div class="amt">500 F<small>par quiz</small></div>
       <ul>
         <li>Paiement par Wave, sans abonnement</li>
-        <li>Jusqu'à 20 questions par quiz</li>
-        <li>Joueurs illimités et gratuits</li>
+        <li>Jusqu'à 30 questions par quiz</li>
+        <li>Jusqu'à 200 joueurs par partie, gratuits pour eux</li>
         <li>Classement en direct et podium</li>
       </ul>
     </div>
@@ -75,12 +75,13 @@ async function ensureAuth() {
   uid = auth.currentUser.uid;
 }
 
-async function start(id, pseudo) {
+async function start(id, pseudo, full) {
   quizId = id;
   const qref = doc(db, "quizzes", id);
   pRef = doc(db, "quizzes", id, "players", uid);
   const snap = await getDoc(pRef);
   if (!snap.exists()) {
+    if (full) throw Object.assign(new Error("full"), { full: true });
     await setDoc(pRef, { pseudo, score: 0, joinedAt: serverTimestamp() });
   }
   questions = (await getDocs(query(collection(qref, "questions"), orderBy("ordre")))).docs.map((d) => d.data());
@@ -105,10 +106,10 @@ $("#go").onclick = async () => {
     const res = await getDocs(q);
     if (res.empty) { showErr("PIN introuvable, ou le quiz n'est pas encore actif."); return; }
     store.set("quizci_pseudo", pseudo);
-    await start(res.docs[0].id, pseudo);
+    await start(res.docs[0].id, pseudo, !!res.docs[0].data().full);
   } catch (e) {
     console.error(e);
-    showErr("Impossible de rejoindre. Vérifie ta connexion et réessaie.");
+    showErr(e.full ? "Cette partie est complète (200 joueurs maximum)." : e.code === "permission-denied" ? "Impossible de rejoindre : la partie est complète ou fermée." : "Impossible de rejoindre. Vérifie ta connexion et réessaie.");
   } finally { $("#go").disabled = false; }
 };
 
@@ -138,7 +139,9 @@ function put(key, inner) {
   $("#game").innerHTML = `<div class="stage">${inner}</div>`;
   return true;
 }
-const foot = () => `<div class="sfoot"><span>${esc(me.pseudo)}</span><span>${me.rank ? ord(me.rank) + " · " : ""}${fmt(me.score)} pts</span></div>`;
+// Rang et points viennent de la fiche du quiz (écrits une seule fois par question par l'écran projeté)
+const R = () => (quiz.results || {})[uid] || {};
+const foot = () => `<div class="sfoot"><span>${esc(me.pseudo)}</span><span>${R().rank ? ord(R().rank) + " · " : ""}${fmt(R().score)} pts</span></div>`;
 
 // Un seul appui sur une réponse : elle est envoyée tout de suite, sans bouton « Valider »
 $("#game").addEventListener("click", async (e) => {
@@ -195,22 +198,23 @@ function render() {
 
   // 2. Résultat de la question (et pendant le classement projeté) : bonne réponse, points, rang
   if (quiz.phase === "result" || quiz.phase === "leaderboard") {
-    if (me.lastQ !== i) { put("rw" + i, `<div class="sent"><div class="bl">…</div><h2>Résultat en cours</h2></div>${foot()}`); return; }
+    if (quiz.resultsQ !== i) { put("rw" + i, `<div class="sent"><div class="bl">…</div><h2>Résultat en cours</h2></div>${foot()}`); return; }
     const rep = me.reponse && me.reponse.q === i;
-    put(`r${i}|${me.rank}|${me.score}`, `<div class="res ${me.ok ? "ok" : rep ? "ko" : "none"}">
-      <div class="rt">${me.ok ? "Bonne réponse !" : rep ? "Raté…" : "Pas de réponse"}</div>
-      <div class="rp">${me.ok ? "+" + fmt(me.last) + " pts" : "0 pt"}</div>
-      <div class="rk"><small>Ton classement</small><b>${ord(me.rank)}</b></div>
-      <div class="rs">${fmt(me.score)} pts au total</div></div>${foot()}`);
+    const r = R();
+    put(`r${i}|${r.rank}|${r.score}`, `<div class="res ${r.ok ? "ok" : rep ? "ko" : "none"}">
+      <div class="rt">${r.ok ? "Bonne réponse !" : rep ? "Raté…" : "Pas de réponse"}</div>
+      <div class="rp">${r.ok ? "+" + fmt(r.last) + " pts" : "0 pt"}</div>
+      <div class="rk"><small>Ton classement</small><b>${ord(r.rank)}</b></div>
+      <div class="rs">${fmt(r.score)} pts au total</div></div>${foot()}`);
     return;
   }
 
   // 3. Fin de partie
   if (quiz.phase === "podium" || quiz.statut === "termine") {
     store.set("quizci_quiz", "");
-    put(`end|${me.rank}|${me.score}`, `<div class="res fin"><div class="rt">Partie terminée</div>
-      <div class="rk"><small>Ton classement final</small><b>${ord(me.rank)}</b></div>
-      <div class="rs">${fmt(me.score)} pts</div>
+    put(`end|${R().rank}|${R().score}`, `<div class="res fin"><div class="rt">Partie terminée</div>
+      <div class="rk"><small>Ton classement final</small><b>${ord(R().rank)}</b></div>
+      <div class="rs">${fmt(R().score)} pts</div>
       <button class="cta" onclick="location.reload()">Rejouer avec un autre PIN</button></div>${foot()}`);
     return;
   }

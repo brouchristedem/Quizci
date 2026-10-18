@@ -10,7 +10,8 @@ export const ADMIN_EMAIL = "brouchristedem@gmail.com";
 // Numéro WhatsApp admin, format international sans "+" (ex: 2250700000000). Vide = le teacher choisit le contact.
 export const ADMIN_WHATSAPP = "2250545177571";
 export const PRIX = 500;
-export const MAX_QUESTIONS = 20;
+export const MAX_QUESTIONS = 30;
+export const MAX_PLAYERS = 200;
 
 const app = initializeApp({
   apiKey: "AIzaSyDgMHEvSdkgw4YoE42exO_S8Uxaiqbntt8",

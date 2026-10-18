@@ -29,8 +29,8 @@
       <div class="amt">500 F<small>par quiz</small></div>
       <ul>
         <li>Paiement par Wave, sans abonnement</li>
-        <li>Jusqu'à 20 questions par quiz</li>
-        <li>Joueurs illimités et gratuits</li>
+        <li>Jusqu'à 30 questions par quiz</li>
+        <li>Jusqu'à 200 joueurs par partie, gratuits pour eux</li>
         <li>Création et enregistrement gratuits</li>
       </ul>
     </div>
@@ -120,7 +120,7 @@
 </div>
 
 <script type="module">
-import { auth, db, $, esc, COULEURS, LETTRES, fit, ADMIN_WHATSAPP, PRIX, MAX_QUESTIONS,
+import { auth, db, $, esc, COULEURS, LETTRES, fit, ADMIN_WHATSAPP, PRIX, MAX_QUESTIONS, MAX_PLAYERS,
   GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged,
   collection, query, where, orderBy, getDoc, getDocs, addDoc, updateDoc, deleteDoc, writeBatch, setDoc, doc, onSnapshot, serverTimestamp } from "./js/fb.js";
 import { parseQuiz } from "./js/parser.js";
@@ -333,6 +333,8 @@ async function runGame(id) {
   const questions = (await getDocs(query(collection(qref, "questions"), orderBy("ordre")))).docs.map((d) => d.data());
   const bonnes = (await getDoc(doc(qref, "private", "answers"))).data().bonnes;
   const limit = (quiz.temps || 20) * 1000;
+  // Résultats (rang, points) : une seule écriture par question dans la fiche du quiz, au lieu d'une par joueur
+  let res = quiz.results || {}, isFull = !!quiz.full;
   let phase = quiz.phase || "lobby", idx = quiz.qIndex ?? -1, players = [], qStartSrv = null, qStartLocal = Date.now(), timerH = null, built = null;
 
   onSnapshot(qref, (s) => { const d = s.data(); if (d?.qStart?.toMillis) qStartSrv = d.qStart.toMillis(); });
@@ -350,6 +352,9 @@ async function runGame(id) {
       }
       seen.add(k);
     }
+    players.forEach((p) => { p.score = res[p.id]?.score || 0; });
+    const full = players.length >= MAX_PLAYERS;
+    if (full !== isFull) { isFull = full; updateDoc(qref, { full }).catch(() => {}); }
     draw();
     if (phase === "question" && players.length && players.every((p) => p.reponse?.q === idx && p.reponseAt)) endQuestion();
   });
@@ -368,6 +373,7 @@ async function runGame(id) {
           <div class="pin">${quiz.pin}</div>
           <div style="margin:18px auto;width:216px;background:#fff;padding:8px;border-radius:12px" id="qr"></div>
           <div class="chips" id="chips" style="justify-content:center"></div>
+          <p class="muted" id="cnt"></p>
           <p><button id="start" class="ok" style="font-size:1.4rem;padding:18px 40px">Démarrer</button></p>
           <p><a class="muted" href="host">← Mes quiz</a></p></div>`;
         if (window.QRCode) new QRCode($("#qr"), { text: url, width: 200, height: 200 });
@@ -375,6 +381,7 @@ async function runGame(id) {
       }
       $("#chips").innerHTML = players.map((p) => `<span class="chip">${esc(p.pseudo)}<button data-k="${p.id}" title="Exclure">✕</button></span>`).join("") || `<span class="muted">En attente des joueurs…</span>`;
       $("#chips").querySelectorAll("[data-k]").forEach((b) => b.onclick = () => deleteDoc(doc(qref, "players", b.dataset.k)));
+      $("#cnt").textContent = `${players.length} / ${MAX_PLAYERS} joueurs`;
       $("#start").disabled = players.length === 0;
       return;
     }
@@ -437,24 +444,24 @@ async function runGame(id) {
     phase = "result"; clearInterval(timerH);
     const bonne = bonnes[idx];
     const start = qStartSrv ?? qStartLocal;
-    const res = players.map((p) => {
+    const rows = players.map((p) => {
       const r = p.reponse, t = p.reponseAt?.toMillis?.();
       const ok = !!(r && r.q === idx && t && r.c === bonne);
       const el = Math.min(limit, Math.max(0, (t ?? start + limit) - start));
       const pts = ok ? Math.round(1000 * (1 - el / limit / 2)) : 0;
-      return { id: p.id, ok, pts, score: (p.score || 0) + pts };
+      return { id: p.id, ok, last: pts, score: (p.score || 0) + pts };
     });
-    const sorted = [...res].sort((a, b) => b.score - a.score);
-    for (let i = 0; i < res.length; i += 400) {
-      const b = writeBatch(db);
-      res.slice(i, i + 400).forEach((r) => b.update(doc(qref, "players", r.id), { score: r.score, last: r.pts, ok: r.ok, lastQ: idx, rank: sorted.findIndex((x) => x.id === r.id) + 1 }));
-      await b.commit().catch((e) => console.error(e));
-    }
-    await updateDoc(qref, { phase, correct: bonne });
+    const sorted = [...rows].sort((a, b) => b.score - a.score);
+    const out = {};
+    rows.forEach((r) => { out[r.id] = { ok: r.ok, last: r.last, score: r.score, rank: sorted.findIndex((x) => x.id === r.id) + 1 }; });
+    res = out;
+    players.forEach((p) => { p.score = out[p.id].score; });
+    await updateDoc(qref, { phase, correct: bonne, results: out, resultsQ: idx });
     draw();
   }
 
-  async function showLeaderboard() { phase = "leaderboard"; await updateDoc(qref, { phase }); draw(); }
+  // Le classement reste local à l'écran projeté : les téléphones gardent leur écran de résultat (économise des lectures)
+  function showLeaderboard() { phase = "leaderboard"; draw(); }
 
   async function next() {
     if (idx + 1 < questions.length) return startQuestion(idx + 1);

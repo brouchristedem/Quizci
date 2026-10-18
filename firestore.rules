@@ -55,14 +55,17 @@ service cloud.firestore {
       match /players/{playerId} {
         allow read: if isAdmin() || isOwner(quizId)
           || (signedIn() && request.auth.uid == playerId);
+        // Partie complète (200 joueurs) : l'écran projeté passe full = true sur le quiz
         allow create: if signedIn()
           && request.auth.uid == playerId
           && quiz(quizId).statut in ['actif', 'en_cours']
+          && quiz(quizId).get('full', false) != true
           && request.resource.data.score == 0;
-        allow update: if isAdmin() || isOwner(quizId)
-          || (signedIn() && request.auth.uid == playerId
+        // Cas du joueur évalué en premier : évite un get() inutile à chaque réponse
+        allow update: if (signedIn() && request.auth.uid == playerId
               && request.resource.data.diff(resource.data)
-                   .affectedKeys().hasOnly(['reponse', 'reponseAt']));
+                   .affectedKeys().hasOnly(['reponse', 'reponseAt']))
+          || isAdmin() || isOwner(quizId);
         allow delete: if isAdmin() || isOwner(quizId);
       }
     }

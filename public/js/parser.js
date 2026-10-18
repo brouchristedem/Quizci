@@ -15,7 +15,7 @@ B) Faux
 REPONSE: A
 `;
 
-export function parseQuiz(text, max = 20) {
+export function parseQuiz(text, max = 30) {
   const erreurs = [];
   const out = { titre: "", temps: 20, questions: [], erreurs };
   let cur = null;

@@ -27,7 +27,9 @@ r = parseQuiz("n'importe quoi");
 assert.ok(r.erreurs.length > 0);
 
 // 4. Limite du nombre de questions
-const many = Array.from({ length: 21 }, (_, i) => `Q${i + 1}: q\nA) a\nB) b\nREPONSE: A`).join("\n");
+const many = Array.from({ length: 31 }, (_, i) => `Q${i + 1}: q\nA) a\nB) b\nREPONSE: A`).join("\n");
 assert.ok(parseQuiz(many).erreurs.some((e) => e.includes("Maximum")));
+const ok30 = Array.from({ length: 30 }, (_, i) => `Q${i + 1}: q\nA) a\nB) b\nREPONSE: A`).join("\n");
+assert.ok(!parseQuiz(ok30).erreurs.some((e) => e.includes("Maximum")));
 
 console.log("parser OK");
