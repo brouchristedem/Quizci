@@ -78,7 +78,9 @@ button:disabled{opacity:.45;cursor:not-allowed;transform:none}
 .hero p.sub{color:var(--mut);font-size:1.05rem;margin:6px auto 0;max-width:34ch}
 .joincard{margin-top:18px}
 .joincard input{text-align:center;font-weight:800}
-#pin{font-size:1.9rem;letter-spacing:.35em;padding-left:.35em}
+#pin{font-size:1.4rem;padding:10px 14px}
+#pin:not(:placeholder-shown){font-size:1.7rem;letter-spacing:.3em;padding-left:.3em}
+#pin::placeholder{font-size:1rem;font-weight:700;letter-spacing:normal}
 .tag{display:inline-block;background:rgba(255,138,31,.18);color:var(--acc2);border:1px solid rgba(255,183,3,.4);padding:5px 14px;border-radius:99px;font-weight:800;font-size:.82rem;margin-bottom:10px}
 .promo{margin-top:34px}
 .promo h2{text-align:center;font-size:1.6rem}
