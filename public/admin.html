@@ -3,30 +3,64 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
 <title>Quizci · Admin</title>
 <link rel="stylesheet" href="css/style.css">
+<style>
+  .top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .top .logo{font-size:1.7rem}
+
+  /* Statistiques : grille régulière, cartes de même hauteur */
+  .stats{grid-template-columns:repeat(2,1fr);grid-auto-rows:1fr;margin:14px 0 6px}
+  .stat{display:flex;flex-direction:column;justify-content:space-between;gap:8px;min-height:96px}
+  .stat span{font-size:.85rem;line-height:1.25}
+  .stat b{font-size:1.9rem;line-height:1}
+  @media (min-width:760px){.stats{grid-template-columns:repeat(4,1fr)}}
+
+  /* Liste de quiz : une carte par quiz */
+  .qlist{display:grid;gap:12px;margin-top:8px}
+  @media (min-width:760px){.qlist{grid-template-columns:1fr 1fr}}
+  .qa{background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--line);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:8px;min-width:0}
+  .qa-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+  .qa-title{font-weight:800;font-size:1.05rem;line-height:1.25;overflow-wrap:anywhere}
+  .qa-meta{color:var(--mut);font-size:.88rem}
+  .qa-meta code{background:rgba(255,255,255,.12);border-radius:6px;padding:1px 6px;color:#fff}
+  .qa-who{display:flex;flex-direction:column;font-size:.92rem;overflow-wrap:anywhere}
+  .qa-who span{color:var(--mut);font-size:.85rem}
+  .qa-pin{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.08);border-radius:12px;padding:8px 12px;font-size:.85rem;color:var(--mut)}
+  .qa-pin b{font-size:1.5rem;letter-spacing:.12em;color:#fff}
+  .qa-actions{display:flex;gap:8px;margin-top:4px}
+  .qa-actions button{white-space:nowrap;min-height:46px}
+  .qa-actions .act{flex:1 1 auto}
+  .qa-actions .del{flex:0 0 auto;background:transparent;border:2px solid var(--ko);color:#ffd0da}
+  .empty{text-align:center;padding:28px 12px}
+</style>
 </head>
 <body>
 <div class="wrap wide">
-  <div class="row" style="justify-content:space-between"><div class="logo">Quiz<b>ci</b> · Admin</div><button id="out" class="out hide" type="button">Déconnexion</button></div>
+  <div class="top"><div class="logo">Quiz<b>ci</b> · Admin</div><button id="out" class="out hide" type="button">Déconnexion</button></div>
 
   <div id="login" class="card center">
     <p>Connexion réservée à l'administrateur.</p>
-    <button id="gbtn">Se connecter avec Google</button>
+    <button id="gbtn" type="button">Se connecter avec Google</button>
     <div id="lerr" class="err hide"></div>
   </div>
 
   <div id="app" class="hide">
     <div class="stats" id="stats"></div>
     <h2>Quiz</h2>
-    <div class="card" style="overflow-x:auto"><table id="tbl"></table></div>
+    <div id="list" class="qlist"><p class="muted empty">Chargement…</p></div>
   </div>
 </div>
 
 <script type="module">
 import { auth, db, $, esc, ADMIN_EMAIL, PRIX,
   GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged,
-  collection, query, where, getDocs, updateDoc, deleteDoc, doc, onSnapshot, serverTimestamp } from "./js/fb.js";
+  collection, query, where, getDocs, updateDoc, deleteDoc, writeBatch, doc, onSnapshot, serverTimestamp } from "./js/fb.js";
+
+const LABEL = { brouillon: "À activer", actif: "Actif", en_cours: "En cours", termine: "Terminé" };
+const RANK = { brouillon: 0, actif: 1, en_cours: 1, termine: 2 };
+let ALL = [];
 
 const err = (m) => { const e = $("#lerr"); e.textContent = m; e.classList.remove("hide"); };
 $("#gbtn").onclick = () => signInWithPopup(auth, new GoogleAuthProvider()).catch((e) => err(e.message));
@@ -35,51 +69,91 @@ $("#out").onclick = () => signOut(auth);
 let unsub = null;
 onAuthStateChanged(auth, (u) => {
   if (unsub) { unsub(); unsub = null; }
-  const ok = u && !u.isAnonymous && u.email === ADMIN_EMAIL;
-  $("#login").classList.toggle("hide", !!ok);
+  const ok = !!(u && !u.isAnonymous && u.email === ADMIN_EMAIL);
+  $("#login").classList.toggle("hide", ok);
   $("#app").classList.toggle("hide", !ok);
-  $("#out").classList.toggle("hide", !u);
-  if (u && !ok) { err("Ce compte n'est pas administrateur."); return; }
-  if (ok) unsub = onSnapshot(collection(db, "quizzes"), (s) => draw(s.docs.map((d) => ({ id: d.id, ...d.data() }))), (e) => err(e.message));
+  // Un joueur est connecté en anonyme sur ce site : pas de bouton Déconnexion ni d'erreur pour lui
+  $("#out").classList.toggle("hide", !u || u.isAnonymous);
+  $("#lerr").classList.add("hide");
+  if (u && !u.isAnonymous && !ok) { err("Ce compte n'est pas administrateur."); return; }
+  if (ok) unsub = onSnapshot(collection(db, "quizzes"),
+    (s) => { ALL = s.docs.map((d) => ({ id: d.id, ...d.data() })); draw(); },
+    (e) => { $("#list").innerHTML = `<p class="err">${esc(e.message)}</p>`; });
 });
 
-const fmt = (t) => t?.toDate ? t.toDate().toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }) : "";
+const fmt = (t) => t?.toDate ? t.toDate().toLocaleString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
 
-function draw(list) {
-  list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-  const rank = { brouillon: 0, actif: 1, en_cours: 1, termine: 2 };
-  list.sort((a, b) => rank[a.statut] - rank[b.statut]);
+function card(q) {
+  const live = q.statut === "actif" || q.statut === "en_cours";
+  const pin = live && q.pin ? `<div class="qa-pin">PIN <b>${esc(q.pin)}</b></div>` : "";
+  let actions = "";
+  if (q.statut === "brouillon") {
+    actions = `<div class="qa-actions"><button class="ok act" type="button" data-act="on" data-id="${esc(q.id)}">Rendre actif</button><button class="del" type="button" data-act="del" data-id="${esc(q.id)}">Supprimer</button></div>`;
+  } else if (q.statut === "termine") {
+    actions = `<div class="qa-actions"><button class="del act" type="button" data-act="del" data-id="${esc(q.id)}">Supprimer</button></div>`;
+  }
+  return `<article class="qa">
+    <div class="qa-top"><div class="qa-title">${esc(q.titre || "(sans titre)")}</div><span class="badge ${esc(q.statut)}">${esc(LABEL[q.statut] || q.statut || "?")}</span></div>
+    <div class="qa-meta">${q.nbQuestions || "?"} questions · ${q.temps || 20} s par question</div>
+    <div class="qa-who"><b>${esc(q.ownerName || "—")}</b><span>${esc(q.ownerEmail || "")}</span></div>
+    <div class="qa-meta">${esc(fmt(q.createdAt))} · ID <code>${esc(q.id.slice(0, 8))}</code></div>
+    ${pin}${actions}
+  </article>`;
+}
+
+function draw() {
+  const list = [...ALL].sort((a, b) =>
+    (RANK[a.statut] ?? 3) - (RANK[b.statut] ?? 3) || (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
   const payes = list.filter((q) => q.statut !== "brouillon");
   $("#stats").innerHTML = [
     ["Quiz créés", list.length],
-    ["En attente de paiement", list.filter((q) => q.statut === "brouillon").length],
+    ["En attente de paiement", list.length - payes.length],
     ["Quiz activés", payes.length],
     ["Revenus estimés", (payes.length * PRIX).toLocaleString("fr-FR") + " F"],
   ].map(([k, v]) => `<div class="stat"><span class="muted">${k}</span><b>${v}</b></div>`).join("");
-  $("#tbl").innerHTML = `<tr><th>Date</th><th>ID</th><th>Titre</th><th>Teacher</th><th>Q.</th><th>Statut</th><th>PIN</th><th></th></tr>` +
-    list.map((q) => `<tr>
-      <td>${fmt(q.createdAt)}</td><td><code>${q.id.slice(0, 8)}</code></td><td>${esc(q.titre)}</td>
-      <td>${esc(q.ownerName || "")}<br><span class="muted">${esc(q.ownerEmail || "")}</span></td><td>${q.nbQuestions || ""}</td>
-      <td><span class="badge ${q.statut}">${q.statut}</span></td><td>${esc(q.pin || "")}</td>
-      <td>${q.statut === "brouillon" ? `<button data-act="${q.id}">Rendre actif</button> <button class="ko" data-del="${q.id}">✕</button>` : ""}</td></tr>`).join("");
-  document.querySelectorAll("[data-act]").forEach((b) => b.onclick = () => activer(b.dataset.act, b));
-  document.querySelectorAll("[data-del]").forEach((b) => b.onclick = async () => {
-    if (confirm("Supprimer ce quiz ?")) await deleteDoc(doc(db, "quizzes", b.dataset.del));
-  });
+  $("#list").innerHTML = list.map(card).join("") || `<p class="muted empty">Aucun quiz pour l'instant.</p>`;
 }
 
-async function activer(id, btn) {
-  if (!confirm("Paiement reçu ? Rendre ce quiz actif.")) return;
-  btn.disabled = true;
+$("#list").addEventListener("click", async (e) => {
+  const b = e.target.closest("button[data-act]");
+  if (!b || b.disabled) return;
+  const q = ALL.find((x) => x.id === b.dataset.id);
+  if (!q) return;
+  const label = b.textContent;
   try {
-    let pin;
-    for (let n = 0; n < 10; n++) {
-      pin = String(Math.floor(100000 + Math.random() * 900000));
-      const dup = await getDocs(query(collection(db, "quizzes"), where("pin", "==", pin), where("statut", "in", ["actif", "en_cours"])));
-      if (dup.empty) break;
+    if (b.dataset.act === "on") {
+      if (!confirm(`Paiement de ${PRIX} F reçu pour « ${q.titre || "ce quiz"} » ? Le quiz sera activé.`)) return;
+      b.disabled = true; b.textContent = "Activation…";
+      await activer(q.id);
+    } else if (b.dataset.act === "del") {
+      if (!confirm(`Supprimer définitivement « ${q.titre || "ce quiz"} » ?`)) return;
+      b.disabled = true; b.textContent = "Suppression…";
+      await supprimer(q.id);
     }
-    await updateDoc(doc(db, "quizzes", id), { statut: "actif", pin, phase: "lobby", qIndex: -1, activatedAt: serverTimestamp() });
-  } catch (e) { alert(e.message); btn.disabled = false; }
+  } catch (er) { console.error(er); alert(er.message); b.disabled = false; b.textContent = label; }
+});
+
+async function activer(id) {
+  let pin;
+  for (let n = 0; n < 10; n++) {
+    pin = String(Math.floor(100000 + Math.random() * 900000));
+    const dup = await getDocs(query(collection(db, "quizzes"), where("pin", "==", pin), where("statut", "in", ["actif", "en_cours"])));
+    if (dup.empty) break;
+  }
+  await updateDoc(doc(db, "quizzes", id), { statut: "actif", pin, phase: "lobby", qIndex: -1, activatedAt: serverTimestamp() });
+}
+
+// Supprime le quiz et ses sous-collections (sinon elles restent orphelines dans Firestore)
+async function supprimer(id) {
+  for (const sub of ["questions", "players", "private"]) {
+    const docs = (await getDocs(collection(db, "quizzes", id, sub))).docs;
+    for (let i = 0; i < docs.length; i += 400) {
+      const batch = writeBatch(db);
+      docs.slice(i, i + 400).forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+    }
+  }
+  await deleteDoc(doc(db, "quizzes", id));
 }
 </script>
 </body>
