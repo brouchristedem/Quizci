@@ -1,54 +1,155 @@
-:root{--bg:#1d1b3a;--card:#2a2754;--txt:#fff;--mut:#b8b5e0;--c0:#ef476f;--c1:#118ab2;--c2:#e8a400;--c3:#06a77d;--ok:#06a77d;--ko:#ef476f;--acc:#7c5cff}
+/* Quizci — design v2 : violet profond + orange solaire. Le logo (Quiz + ci) reste identique. */
+:root{
+  --bg:#150a42;--bg2:#2a0f6b;--card:#221259;--card2:#2e1a73;--line:rgba(255,255,255,.12);
+  --txt:#fff;--mut:#bdb4ea;--acc:#ff8a1f;--acc2:#ffb703;--vio:#7a4dff;
+  --c0:#ef476f;--c1:#118ab2;--c2:#e8a400;--c3:#06a77d;--ok:#06a77d;--ko:#ef476f;
+  --logo-ci:#e8a400;
+}
 *{box-sizing:border-box}
-body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh}
-.wrap{max-width:720px;margin:0 auto;padding:16px}
+html{scroll-behavior:smooth;background:#150a42}
+body{margin:0;font-family:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--txt);min-height:100vh;line-height:1.45;
+  background:
+    radial-gradient(900px 520px at 85% -10%,rgba(255,138,31,.22),transparent 60%),
+    radial-gradient(800px 600px at -10% 10%,rgba(122,77,255,.35),transparent 60%),
+    linear-gradient(180deg,var(--bg2) 0,var(--bg) 520px,var(--bg) 100%);
+  background-attachment:fixed}
+.wrap{max-width:720px;margin:0 auto;padding:16px 16px 48px}
 .wide{max-width:1100px}
-h1,h2,h3{margin:.3em 0}
-.logo{font-weight:800;font-size:2rem;letter-spacing:-.02em}
-.logo b{color:var(--c2)}
-.card{background:var(--card);border-radius:16px;padding:18px;margin:12px 0}
-input,select,textarea{width:100%;padding:14px;font-size:1.1rem;border-radius:12px;border:2px solid transparent;background:#fff;color:#111;margin:6px 0}
-textarea{min-height:200px;font-family:ui-monospace,monospace;font-size:.95rem}
-button,.btn{display:inline-block;background:var(--acc);color:#fff;border:0;border-radius:12px;padding:14px 20px;font-size:1.05rem;font-weight:700;cursor:pointer;text-decoration:none;text-align:center}
-button.full{width:100%}
-button.sec{background:#3b3870}
-button.ok{background:var(--ok)}
-button.ko{background:var(--ko)}
-button:disabled{opacity:.45;cursor:not-allowed}
+h1,h2,h3{margin:.3em 0;line-height:1.15}
+h1{font-size:clamp(1.8rem,5vw,2.6rem);font-weight:900;letter-spacing:-.02em}
+h2{font-size:1.35rem;font-weight:800}
+a{color:var(--acc2)}
+
+/* Logo : ne pas modifier */
+.logo{font-weight:800;font-size:2rem;letter-spacing:-.02em;color:#fff;text-decoration:none}
+.logo b{color:var(--logo-ci)}
+
+/* Barre du haut */
+.nav{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 0 18px}
+.nav .side{display:flex;align-items:center;gap:12px}
+.who{display:flex;align-items:center;gap:8px;color:var(--mut);font-size:.9rem;font-weight:600;max-width:46vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.who i{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,var(--acc),var(--vio));display:inline-flex;align-items:center;justify-content:center;font-style:normal;font-weight:800;color:#fff;flex:none}
+@media (max-width:520px){.who span{display:none}}
+
+/* Cartes */
+.card{background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--line);border-radius:20px;padding:20px;margin:14px 0;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.card.flat{background:rgba(255,255,255,.06);box-shadow:none}
+
+/* Champs */
+label.f{display:block;font-weight:700;font-size:.85rem;color:var(--mut);margin:14px 0 4px;text-transform:uppercase;letter-spacing:.06em}
+input,select,textarea{width:100%;padding:14px 16px;font:inherit;font-size:1.05rem;border-radius:14px;border:2px solid transparent;background:#fff;color:#16102f;margin:4px 0}
+input::placeholder,textarea::placeholder{color:#8f89a8}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 4px rgba(255,138,31,.25)}
+textarea{min-height:140px;font-family:ui-monospace,monospace;font-size:.95rem;resize:vertical}
+input[type=file]{padding:10px}
+
+/* Boutons */
+button,.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--vio);color:#fff;border:0;border-radius:14px;padding:14px 22px;font:inherit;font-size:1.02rem;font-weight:800;cursor:pointer;text-decoration:none;text-align:center;transition:transform .12s,filter .12s,box-shadow .12s}
+button:hover,.btn:hover{filter:brightness(1.08)}
+button:active,.btn:active{transform:scale(.97)}
+button.full,.btn.full{width:100%}
+.btn.cta,button.cta{background:linear-gradient(135deg,var(--acc),var(--acc2));color:#2a1200;box-shadow:0 8px 22px rgba(255,138,31,.35)}
+.btn.lg,button.lg{padding:18px 30px;font-size:1.15rem;border-radius:16px}
+button.sec,.btn.sec{background:rgba(255,255,255,.12);color:#fff}
+button.out,.btn.out{background:transparent;color:#fff;border:2px solid rgba(255,255,255,.35);padding:9px 18px;font-size:.92rem;border-radius:999px}
+button.out:hover,.btn.out:hover{border-color:#fff;background:rgba(255,255,255,.08)}
+button.ok,.btn.ok{background:var(--ok)}
+button.ko,.btn.ko{background:var(--ko)}
+button.sm,.btn.sm{padding:9px 14px;font-size:.9rem;border-radius:11px}
+button:disabled{opacity:.45;cursor:not-allowed;transform:none}
+
 .muted{color:var(--mut)}
-.err{color:#ffb3c1;background:#4a1a2a;padding:10px 14px;border-radius:10px;margin:8px 0}
+.err{color:#ffd0da;background:rgba(239,71,111,.2);border:1px solid rgba(239,71,111,.5);padding:10px 14px;border-radius:12px;margin:10px 0}
+.warnbox{background:rgba(255,183,3,.14);border:1px solid rgba(255,183,3,.5);color:#ffe9b0;padding:12px 16px;border-radius:12px;margin:12px 0;font-size:.95rem}
+.warnbox ul{margin:6px 0 0;padding-left:18px}
 .good{color:#b7f5df}
-.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
 .row>*{flex:0 0 auto}
 .grow{flex:1 1 auto!important}
-.badge{padding:3px 10px;border-radius:99px;font-size:.8rem;font-weight:700;background:#3b3870}
-.badge.actif,.badge.en_cours{background:var(--ok)}
-.badge.brouillon{background:#8a6d00}
-.badge.termine{background:#555}
 .hide{display:none!important}
 .center{text-align:center}
-/* boutons de réponse */
+.badge{display:inline-block;padding:4px 12px;border-radius:99px;font-size:.78rem;font-weight:800;background:rgba(255,255,255,.15);white-space:nowrap}
+.badge.actif,.badge.en_cours{background:var(--ok)}
+.badge.brouillon{background:#b07a00}
+.badge.termine{background:#555}
+
+/* Accueil */
+.hero{text-align:center;padding:4px 0 6px}
+.hero p.sub{color:var(--mut);font-size:1.05rem;margin:6px auto 0;max-width:34ch}
+.joincard{margin-top:18px}
+.joincard input{text-align:center;font-weight:800}
+#pin{font-size:1.9rem;letter-spacing:.35em;padding-left:.35em}
+.tag{display:inline-block;background:rgba(255,138,31,.18);color:var(--acc2);border:1px solid rgba(255,183,3,.4);padding:5px 14px;border-radius:99px;font-weight:800;font-size:.82rem;margin-bottom:10px}
+.promo{margin-top:34px}
+.promo h2{text-align:center;font-size:1.6rem}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:16px 0}
+.step{background:rgba(255,255,255,.07);border:1px solid var(--line);border-radius:18px;padding:16px;text-align:center}
+.step .n{width:38px;height:38px;border-radius:50%;margin:0 auto 8px;background:linear-gradient(135deg,var(--acc),var(--acc2));color:#2a1200;font-weight:900;display:flex;align-items:center;justify-content:center}
+.step b{display:block;margin-bottom:2px}
+.step span{color:var(--mut);font-size:.9rem}
+.price{display:flex;align-items:center;gap:18px;flex-wrap:wrap;justify-content:center;text-align:left}
+.price .amt{text-align:center;font-size:3rem;font-weight:900;line-height:1;background:linear-gradient(135deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.price .amt small{display:block;margin-top:4px;font-size:1rem;-webkit-text-fill-color:var(--mut);color:var(--mut);font-weight:700}
+.price ul{list-style:none;margin:0;padding:0;flex:1 1 220px}
+.price li{padding:3px 0}
+.price li::before{content:"✓";color:var(--c3);font-weight:900;margin-right:8px}
+.free{display:inline-block;background:rgba(6,167,125,.2);color:#8ef0cf;border-radius:99px;padding:3px 12px;font-weight:800;font-size:.85rem}
+.foot{text-align:center;color:var(--mut);font-size:.85rem;margin-top:30px}
+@media (max-width:560px){.steps{grid-template-columns:1fr}}
+
+/* Éditeur de quiz */
+.seg{display:flex;gap:6px;background:rgba(0,0,0,.25);border-radius:16px;padding:5px;margin:14px 0}
+.seg button{flex:1;background:transparent;color:var(--mut);padding:11px 8px;border-radius:12px;font-size:.95rem}
+.seg button.on{background:#fff;color:#2a0f6b}
+.fields{display:grid;grid-template-columns:1fr 150px;gap:12px}
+@media (max-width:560px){.fields{grid-template-columns:1fr}}
+.qe{background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--line);border-radius:20px;padding:16px;margin:14px 0;position:relative}
+.qe-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
+.qe-h b{font-size:1.05rem}
+.qe-n{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:var(--acc);color:#2a1200;font-weight:900;margin-right:8px}
+.opt{display:flex;align-items:center;gap:10px;margin-top:10px}
+.opt .ltr{flex:none;width:44px;height:50px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-weight:900;color:#fff;font-size:1.1rem}
+.opt .ltr.c0{background:var(--c0)}.opt .ltr.c1{background:var(--c1)}.opt .ltr.c2{background:var(--c2)}.opt .ltr.c3{background:var(--c3)}
+.opt input[type=text]{margin:0}
+.opt .tick{position:relative;flex:none;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;font-size:.68rem;font-weight:800;color:var(--mut);width:58px;text-align:center}
+.opt .tick input{position:absolute;opacity:0;width:0;height:0;padding:0;margin:0;border:0}
+.opt .tick i{width:32px;height:32px;border-radius:50%;border:2px solid rgba(255,255,255,.4);display:flex;align-items:center;justify-content:center;font-style:normal;font-size:1rem;color:transparent;transition:.15s}
+.opt .tick input:checked+i{background:var(--ok);border-color:var(--ok);color:#fff}
+.opt .tick input:checked~span{color:#8ef0cf}
+.opt .tick input:focus-visible+i{box-shadow:0 0 0 4px rgba(255,138,31,.4)}
+.hint{color:var(--mut);font-size:.85rem;margin:10px 0 0}
+.drop{display:block;border:2px dashed rgba(255,255,255,.35);border-radius:18px;padding:22px 16px;text-align:center;cursor:pointer;transition:.15s;margin:12px 0}
+.drop:hover{border-color:var(--acc);background:rgba(255,138,31,.08)}
+.drop b{display:block;font-size:1.05rem}
+.drop input{display:none}
+details.paste{margin-top:10px}
+details.paste summary{cursor:pointer;color:var(--acc2);font-weight:700;padding:6px 0}
+.savebar{position:sticky;bottom:0;margin:18px -16px 0;padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:linear-gradient(180deg,transparent,var(--bg) 30%);display:flex;gap:10px}
+.savebar button{flex:1}
+.pricenote{background:rgba(255,183,3,.12);border:1px solid rgba(255,183,3,.4);border-radius:14px;padding:12px 14px;color:#ffe9b0;font-size:.92rem;margin:14px 0}
+
+/* Jeu : boutons de réponse */
 .choices{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
-.choice{border-radius:14px;padding:22px 14px;font-weight:800;font-size:1.2rem;color:#fff;border:0;min-height:90px;display:flex;gap:10px;align-items:center;justify-content:center;text-align:left}
+.choice{border-radius:16px;padding:22px 14px;font-weight:800;font-size:1.2rem;color:#fff;border:0;min-height:90px;display:flex;gap:10px;align-items:center;justify-content:center;text-align:left;box-shadow:0 6px 0 rgba(0,0,0,.25)}
 .choice.c0{background:var(--c0)}.choice.c1{background:var(--c1)}.choice.c2{background:var(--c2)}.choice.c3{background:var(--c3)}
 .choice.dim{opacity:.25}
 .choice.right{outline:6px solid #fff}
 .choice small{background:rgba(0,0,0,.25);border-radius:8px;padding:2px 9px}
-.timer{font-size:2.4rem;font-weight:800;background:var(--acc);border-radius:99px;width:76px;height:76px;display:flex;align-items:center;justify-content:center}
-.pin{font-size:4rem;font-weight:900;letter-spacing:.12em;background:#fff;color:#111;border-radius:16px;padding:6px 24px;display:inline-block}
+.timer{font-size:2.4rem;font-weight:800;background:linear-gradient(135deg,var(--acc),var(--acc2));color:#2a1200;border-radius:99px;width:76px;height:76px;display:flex;align-items:center;justify-content:center}
+.pin{font-size:4rem;font-weight:900;letter-spacing:.12em;background:#fff;color:#2a0f6b;border-radius:18px;padding:6px 24px;display:inline-block}
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
-.chip{background:#3b3870;border-radius:99px;padding:8px 16px;font-weight:700}
+.chip{background:rgba(255,255,255,.14);border-radius:99px;padding:8px 16px;font-weight:700}
 .chip button{background:none;padding:0 0 0 8px;font-size:1rem;color:var(--mut)}
-.bar{background:#3b3870;border-radius:8px;height:26px;margin:6px 0;overflow:hidden;position:relative}
+.bar{background:rgba(255,255,255,.12);border-radius:8px;height:26px;margin:6px 0;overflow:hidden;position:relative}
 .bar>i{display:block;height:100%}
 .bar>span{position:absolute;left:10px;top:3px;font-weight:700;font-size:.9rem}
-.lb{display:flex;justify-content:space-between;background:var(--card);border-radius:12px;padding:14px 18px;margin:8px 0;font-size:1.3rem;font-weight:700}
+.lb{display:flex;justify-content:space-between;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 18px;margin:8px 0;font-size:1.3rem;font-weight:700}
 .lb.p1{background:#b38600}.lb.p2{background:#7d8590}.lb.p3{background:#9a5b2a}
 .big{font-size:2.6rem;font-weight:900}
 .qtxt{font-size:2rem;font-weight:800;line-height:1.2}
 table{width:100%;border-collapse:collapse}
-td,th{padding:8px;text-align:left;border-bottom:1px solid #3b3870;font-size:.95rem}
+td,th{padding:8px;text-align:left;border-bottom:1px solid var(--line);font-size:.95rem}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
-.stat{background:var(--card);border-radius:14px;padding:14px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
 .stat b{display:block;font-size:1.8rem}
 @media (min-width:900px){.qtxt{font-size:2.8rem}.choice{font-size:1.6rem;min-height:130px}}

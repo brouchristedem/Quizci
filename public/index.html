@@ -8,18 +8,50 @@
 </head>
 <body>
 <div class="wrap center">
-  <div class="logo">Quiz<b>ci</b></div>
+  <div class="nav">
+    <div class="logo">Quiz<b>ci</b></div>
+    <a href="host" class="btn out">Créer mon Quiz</a>
+  </div>
 
-  <div id="join" class="card">
+  <div id="hero" class="hero">
+    <span class="tag">Quiz en direct · Fait pour l'Afrique</span>
+    <h1>Joue, apprends,<br>gagne en classe.</h1>
+    <p class="sub">Entre le code PIN affiché au tableau et rejoins la partie depuis ton téléphone.</p>
+  </div>
+
+  <div id="join" class="card joincard">
     <h2>Rejoindre une partie</h2>
-    <input id="pin" inputmode="numeric" maxlength="6" placeholder="Code PIN">
-    <input id="pseudo" maxlength="15" placeholder="Ton pseudo">
-    <button id="go" class="full">Jouer</button>
+    <input id="pin" inputmode="numeric" maxlength="6" placeholder="Code PIN" autocomplete="off">
+    <input id="pseudo" maxlength="15" placeholder="Ton pseudo" autocomplete="off">
+    <button id="go" class="cta lg full" style="margin-top:10px">Jouer</button>
     <div id="jerr" class="err hide"></div>
-    <p class="muted"><a href="host" style="color:var(--mut)">Je suis teacher</a></p>
+    <p class="muted" style="margin:12px 0 0">Pour les joueurs, c'est <span class="free">100 % gratuit</span></p>
   </div>
 
   <div id="game" class="hide"></div>
+
+  <section id="promo" class="promo">
+    <h2>Tu es enseignant ? Crée ton propre quiz</h2>
+    <p class="muted" style="margin:4px 0 0">Comme Kahoot, mais simple, pas cher et payable par Wave.</p>
+    <div class="steps">
+      <div class="step"><div class="n">1</div><b>Crée</b><span>Écris tes questions ou importe un PDF.</span></div>
+      <div class="step"><div class="n">2</div><b>Active</b><span>Paye par Wave, ton quiz est activé.</span></div>
+      <div class="step"><div class="n">3</div><b>Joue</b><span>Projette l'écran, les élèves rejoignent avec le PIN.</span></div>
+    </div>
+    <div class="card price">
+      <div class="amt">500 F<small>par quiz</small></div>
+      <ul>
+        <li>Paiement par Wave, sans abonnement</li>
+        <li>Jusqu'à 20 questions par quiz</li>
+        <li>Joueurs illimités et gratuits</li>
+        <li>Classement en direct et podium</li>
+      </ul>
+    </div>
+    <a href="host" class="btn cta lg full">Créer mon Quiz</a>
+    <p class="muted" style="font-size:.85rem;margin-top:10px">Tu peux créer et enregistrer ton quiz gratuitement. Tu ne paies que pour l'activer.</p>
+  </section>
+
+  <p class="foot">Quizci · Quiz en direct pour les classes et les groupes</p>
 </div>
 
 <script type="module">
@@ -52,7 +84,7 @@ async function start(id, pseudo) {
   }
   questions = (await getDocs(query(collection(qref, "questions"), orderBy("ordre")))).docs.map((d) => d.data());
   store.set("quizci_quiz", id);
-  $("#join").classList.add("hide");
+  ["#join", "#hero", "#promo"].forEach((s) => $(s).classList.add("hide"));
   $("#game").classList.remove("hide");
   onSnapshot(qref, (s) => { quiz = s.data(); render(); }, () => showEnd("Partie introuvable."));
   onSnapshot(pRef, (s) => { me = s.data(); render(); });
