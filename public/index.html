@@ -55,14 +55,15 @@
 </div>
 
 <script type="module">
-import { auth, db, $, esc, COULEURS, LETTRES,
+import { auth, db, $, esc, COULEURS, LETTRES, fit,
   signInAnonymously, collection, query, where, getDocs, getDoc, setDoc, updateDoc, doc, onSnapshot, orderBy, serverTimestamp } from "./js/fb.js";
 
 const params = new URLSearchParams(location.search);
 if (params.get("pin")) $("#pin").value = params.get("pin");
 
 let quizId = null, quiz = null, me = null, questions = [], uid = null, pRef = null;
-let tick = null;
+let tick = null, built = null;
+const T0 = {}; // instant où chaque question s'est affichée sur ce téléphone
 const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
 $("#pseudo").value = store.get("quizci_pseudo") || "";
 
@@ -85,6 +86,7 @@ async function start(id, pseudo) {
   questions = (await getDocs(query(collection(qref, "questions"), orderBy("ordre")))).docs.map((d) => d.data());
   store.set("quizci_quiz", id);
   ["#join", "#hero", "#promo"].forEach((s) => $(s).classList.add("hide"));
+  document.body.classList.add("play");
   $("#game").classList.remove("hide");
   onSnapshot(qref, (s) => { quiz = s.data(); render(); }, () => showEnd("Partie introuvable."));
   onSnapshot(pRef, (s) => { me = s.data(); render(); });
@@ -122,53 +124,99 @@ $("#go").onclick = async () => {
   } catch {}
 })();
 
-function showEnd(msg) { $("#game").innerHTML = `<div class="card"><h2>${esc(msg)}</h2></div>`; }
+function showEnd(msg) {
+  $("#game").innerHTML = `<div class="stage"><div class="sent"><h2>${esc(msg)}</h2><button class="cta" onclick="location.reload()">Retour</button></div></div>`;
+}
+
+const ord = (n) => (n ? n + (n === 1 ? "er" : "ème") : "–");
+const fmt = (n) => (n || 0).toLocaleString("fr-FR");
+
+// Remplace l'écran seulement s'il a changé (évite les clignotements et garde le timer stable)
+function put(key, inner) {
+  if (built === key) return false;
+  built = key;
+  $("#game").innerHTML = `<div class="stage">${inner}</div>`;
+  return true;
+}
+const foot = () => `<div class="sfoot"><span>${esc(me.pseudo)}</span><span>${me.rank ? ord(me.rank) + " · " : ""}${fmt(me.score)} pts</span></div>`;
+
+// Un seul appui sur une réponse : elle est envoyée tout de suite, sans bouton « Valider »
+$("#game").addEventListener("click", async (e) => {
+  const b = e.target.closest(".choice");
+  if (!b || b.disabled || !quiz) return;
+  const all = $("#game").querySelectorAll(".choice");
+  all.forEach((x) => (x.disabled = true));
+  try {
+    await updateDoc(pRef, { reponse: { q: quiz.qIndex, c: +b.dataset.k }, reponseAt: serverTimestamp() });
+    if (navigator.vibrate) navigator.vibrate(30);
+  } catch (err) { console.error(err); all.forEach((x) => (x.disabled = false)); }
+});
 
 function render() {
   if (!quiz || !me) return;
-  clearInterval(tick);
-  const g = $("#game");
-  const head = `<div class="row" style="justify-content:space-between"><b>${esc(me.pseudo)}</b><b>${me.score || 0} pts</b></div>`;
-  const i = quiz.qIndex ?? -1;
-  const q = questions[i];
+  const i = quiz.qIndex ?? -1, q = questions[i];
+  if (quiz.phase !== "question") clearInterval(tick);
 
+  // 1. Question : seulement les boutons de réponse, comme sur Kahoot
   if (quiz.phase === "question" && q) {
-    const answered = me.reponse && me.reponse.q === i;
-    if (answered) { g.innerHTML = head + `<div class="card"><div class="big">✓</div><h2>Réponse envoyée</h2><p class="muted">Regarde l'écran…</p></div>`; return; }
-    const fin = Date.now() + (quiz.temps || 20) * 1000;
-    g.innerHTML = head + `<div class="card"><div class="row" style="justify-content:space-between"><span class="muted">Question ${i + 1}/${questions.length}</span><b id="t">${quiz.temps || 20}</b></div><div class="qtxt" style="font-size:1.3rem;margin-top:8px">${esc(q.texte)}</div></div>
-      <div class="choices">${q.choix.map((c, k) => `<button class="choice ${COULEURS[k]}" data-k="${k}"><small>${LETTRES[k]}</small> ${esc(c)}</button>`).join("")}</div>`;
-    g.querySelectorAll(".choice").forEach((b) => b.onclick = async () => {
-      g.querySelectorAll(".choice").forEach((x) => x.disabled = true);
-      try { await updateDoc(pRef, { reponse: { q: i, c: +b.dataset.k }, reponseAt: serverTimestamp() }); }
-      catch (e) { console.error(e); g.querySelectorAll(".choice").forEach((x) => x.disabled = false); }
-    });
-    tick = setInterval(() => {
-      const left = Math.max(0, Math.ceil((fin - Date.now()) / 1000));
-      const t = $("#t"); if (t) t.textContent = left;
-      if (left <= 0) { clearInterval(tick); g.querySelectorAll(".choice").forEach((x) => x.disabled = true); }
-    }, 250);
+    const limit = (quiz.temps || 20) * 1000;
+    const sent = me.reponse && me.reponse.q === i;
+    if (sent) {
+      clearInterval(tick);
+      const c = me.reponse.c;
+      put("a" + i, `<div class="sent ${COULEURS[c] || ""}"><div class="bl">${LETTRES[c] || "✓"}</div><h2>Réponse envoyée</h2><p>Regarde l'écran…</p></div>${foot()}`);
+      return;
+    }
+    if (T0[i] && Date.now() - T0[i] >= limit) {
+      clearInterval(tick);
+      put("late" + i, `<div class="sent"><div class="bl">⏱</div><h2>Temps écoulé</h2><p>Regarde l'écran…</p></div>${foot()}`);
+      return;
+    }
+    const longest = Math.max(...q.choix.map((c) => c.length));
+    const built_ = put("q" + i, `<div class="shead"><span class="pill">Question ${i + 1}/${questions.length}</span><div class="timer" id="t">${quiz.temps || 20}</div></div>
+      <div class="tbar"><i id="tb"></i></div>
+      <div class="qbox ${fit(q.texte, 80, 140)}">${esc(q.texte)}</div>
+      <div class="choices fit ${fit(longest, 40, 80)}" data-n="${q.choix.length}">${q.choix.map((c, k) => `<button class="choice ${COULEURS[k]}" data-k="${k}" type="button"><small>${LETTRES[k]}</small><span class="ct">${esc(c)}</span></button>`).join("")}</div>${foot()}`);
+    if (built_) {
+      T0[i] = T0[i] || Date.now();
+      clearInterval(tick);
+      const step = () => {
+        const left = Math.max(0, limit - (Date.now() - T0[i]));
+        const t = $("#t"), b = $("#tb");
+        if (t) t.textContent = Math.ceil(left / 1000);
+        if (b) b.style.width = (left / limit) * 100 + "%";
+        if (left <= 0) { clearInterval(tick); render(); }
+      };
+      step();
+      tick = setInterval(step, 200);
+    }
     return;
   }
 
-  if (quiz.phase === "result") {
-    if (me.lastQ !== i) { g.innerHTML = head + `<div class="card"><h2>…</h2></div>`; return; }
-    g.innerHTML = head + (me.ok
-      ? `<div class="card"><div class="big good">Bonne réponse !</div><h2>+${me.last} pts</h2></div>`
-      : `<div class="card"><div class="big" style="color:#ffb3c1">Raté</div><p class="muted">${me.reponse && me.reponse.q === i ? "Ce n'était pas la bonne réponse." : "Pas de réponse à temps."}</p></div>`)
-      + `<p class="muted">Rang : ${me.rank}</p>`;
+  // 2. Résultat de la question (et pendant le classement projeté) : bonne réponse, points, rang
+  if (quiz.phase === "result" || quiz.phase === "leaderboard") {
+    if (me.lastQ !== i) { put("rw" + i, `<div class="sent"><div class="bl">…</div><h2>Résultat en cours</h2></div>${foot()}`); return; }
+    const rep = me.reponse && me.reponse.q === i;
+    put(`r${i}|${me.rank}|${me.score}`, `<div class="res ${me.ok ? "ok" : rep ? "ko" : "none"}">
+      <div class="rt">${me.ok ? "Bonne réponse !" : rep ? "Raté…" : "Pas de réponse"}</div>
+      <div class="rp">${me.ok ? "+" + fmt(me.last) + " pts" : "0 pt"}</div>
+      <div class="rk"><small>Ton classement</small><b>${ord(me.rank)}</b></div>
+      <div class="rs">${fmt(me.score)} pts au total</div></div>${foot()}`);
     return;
   }
 
-  if (quiz.phase === "leaderboard") { g.innerHTML = head + `<div class="card"><h2>Classement</h2><div class="big">${me.rank ? me.rank + (me.rank === 1 ? "er" : "ème") : "-"}</div><p class="muted">${me.score || 0} points</p></div>`; return; }
-
+  // 3. Fin de partie
   if (quiz.phase === "podium" || quiz.statut === "termine") {
-    g.innerHTML = head + `<div class="card"><h2>Partie terminée</h2><div class="big">${me.rank ? me.rank + (me.rank === 1 ? "er" : "ème") : "-"}</div><p class="muted">${me.score || 0} points</p></div><button class="full" onclick="location.reload()">Rejouer avec un autre PIN</button>`;
     store.set("quizci_quiz", "");
+    put(`end|${me.rank}|${me.score}`, `<div class="res fin"><div class="rt">Partie terminée</div>
+      <div class="rk"><small>Ton classement final</small><b>${ord(me.rank)}</b></div>
+      <div class="rs">${fmt(me.score)} pts</div>
+      <button class="cta" onclick="location.reload()">Rejouer avec un autre PIN</button></div>${foot()}`);
     return;
   }
 
-  g.innerHTML = head + `<div class="card"><h2>Tu es dans la partie !</h2><p class="muted">Regarde l'écran, ça va bientôt commencer.</p></div>`;
+  // 4. Salle d'attente
+  put("w", `<div class="sent"><div class="bl">🎮</div><h2>Tu es dans la partie !</h2><p>Regarde l'écran, ça va bientôt commencer.</p></div>${foot()}`);
 }
 </script>
 </body>

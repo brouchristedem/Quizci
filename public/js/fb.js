@@ -27,3 +27,5 @@ export const $ = (s, r = document) => r.querySelector(s);
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 export const COULEURS = ["c0", "c1", "c2", "c3"];
 export const LETTRES = ["A", "B", "C", "D"];
+// Taille de police adaptée à la longueur du texte : "" (court), "t2" (moyen), "t3" (long)
+export const fit = (t, a = 80, b = 140) => { const n = String(t ?? "").length; return n > b ? "t3" : n > a ? "t2" : ""; };

@@ -155,3 +155,49 @@ td,th{padding:8px;text-align:left;border-bottom:1px solid var(--line);font-size:
 .stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
 .stat b{display:block;font-size:1.8rem}
 @media (min-width:900px){.qtxt{font-size:2.8rem}.choice{font-size:1.6rem;min-height:130px}}
+
+/* Jeu : écrans qui tiennent dans la fenêtre, sans défilement (téléphone et projecteur) */
+body.play .nav,body.play .foot{display:none}
+body.play .wrap{padding:10px 12px calc(10px + env(safe-area-inset-bottom))}
+.stage{display:flex;flex-direction:column;gap:10px;height:calc(100vh - 20px);height:calc(100dvh - 20px);min-height:440px}
+.stage>*{margin:0;min-width:0}
+.shead{flex:none;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.pill{flex:none;background:rgba(255,255,255,.14);border-radius:99px;padding:6px 14px;font-size:.95rem;font-weight:800;white-space:nowrap}
+.stage .timer{width:56px;height:56px;font-size:1.6rem}
+.tbar{flex:none;height:8px;border-radius:99px;background:rgba(255,255,255,.15);overflow:hidden}
+.tbar>i{display:block;height:100%;width:100%;background:linear-gradient(90deg,var(--acc),var(--acc2));transition:width .25s linear}
+.qbox{flex:none;max-height:34%;overflow:auto;text-align:center;font-weight:800;line-height:1.2;font-size:clamp(1.05rem,4.6vw,1.5rem);padding:2px 4px;overflow-wrap:anywhere}
+.qbox.t2{font-size:clamp(.95rem,4vw,1.25rem)}
+.qbox.t3{font-size:clamp(.85rem,3.5vw,1.05rem)}
+.qbox.host{font-size:clamp(1.3rem,3.4vw,2.6rem)}
+.qbox.host.t2{font-size:clamp(1.15rem,2.8vw,2rem)}
+.qbox.host.t3{font-size:clamp(1rem,2.3vw,1.5rem)}
+.choices.fit{flex:1;min-height:0;display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:minmax(0,1fr);gap:10px;margin:0}
+.choices.fit[data-n="2"]{grid-template-columns:1fr}
+.choices.fit[data-n="3"] .choice:last-child{grid-column:1/-1}
+.choices.fit .choice{min-height:0;padding:6px 12px;font-size:clamp(.95rem,4.2vw,1.25rem);line-height:1.15;box-shadow:0 4px 0 rgba(0,0,0,.25);overflow:hidden}
+.choices.fit .choice small{flex:none;font-size:.8em}
+.choices.fit .choice .ct{min-width:0;overflow-wrap:anywhere}
+.choices.fit.t2 .choice{font-size:clamp(.85rem,3.6vw,1.1rem)}
+.choices.fit.t3 .choice{font-size:clamp(.78rem,3.1vw,.95rem)}
+.choices.fit.host .choice{font-size:clamp(1rem,2.4vw,1.9rem);padding:8px 18px;justify-content:flex-start}
+.choices.fit.host .choice .ct{flex:1}
+.choices.fit.host.t2 .choice{font-size:clamp(.95rem,2vw,1.5rem)}
+.choices.fit.host.t3 .choice{font-size:clamp(.85rem,1.7vw,1.2rem)}
+.choice .cnt{flex:none;margin-left:auto;background:rgba(0,0,0,.3);border-radius:99px;padding:2px 14px}
+.sfoot{flex:none;display:flex;justify-content:space-between;align-items:center;gap:10px;background:rgba(255,255,255,.1);border-radius:14px;padding:10px 14px;font-weight:800}
+.sfoot span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sfoot span:last-child{flex:none}
+.sent,.res{flex:1;min-height:0;border-radius:22px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;padding:16px;background:var(--card2);overflow:auto}
+.sent.c0{background:var(--c0)}.sent.c1{background:var(--c1)}.sent.c2{background:var(--c2)}.sent.c3{background:var(--c3)}
+.sent .bl{font-size:clamp(3rem,18vw,5rem);font-weight:900;line-height:1}
+.sent h2{margin:0;font-size:clamp(1.3rem,6vw,1.8rem)}
+.sent p{margin:0;opacity:.9}
+.res.ok{background:var(--ok)}.res.ko{background:var(--ko)}.res.none{background:#5b4a99}.res.fin{background:linear-gradient(160deg,var(--vio),var(--bg2))}
+.res .rt{font-size:clamp(1.6rem,7.5vw,2.4rem);font-weight:900;line-height:1.1}
+.res .rp{font-size:clamp(1.1rem,5vw,1.6rem);font-weight:800}
+.res .rk{margin-top:8px;background:rgba(0,0,0,.22);border-radius:18px;padding:10px 28px}
+.res .rk small{display:block;font-size:.8rem;font-weight:800;text-transform:uppercase;letter-spacing:.07em;opacity:.9}
+.res .rk b{display:block;font-size:clamp(2.6rem,15vw,4.2rem);line-height:1.05;font-weight:900}
+.res .rs{font-weight:700;opacity:.95}
+.res button{margin-top:10px}

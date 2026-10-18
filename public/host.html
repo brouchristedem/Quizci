@@ -120,14 +120,17 @@
 </div>
 
 <script type="module">
-import { auth, db, $, esc, COULEURS, LETTRES, ADMIN_WHATSAPP, PRIX, MAX_QUESTIONS,
+import { auth, db, $, esc, COULEURS, LETTRES, fit, ADMIN_WHATSAPP, PRIX, MAX_QUESTIONS,
   GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged,
   collection, query, where, orderBy, getDoc, getDocs, addDoc, updateDoc, deleteDoc, writeBatch, setDoc, doc, onSnapshot, serverTimestamp } from "./js/fb.js";
 import { parseQuiz } from "./js/parser.js";
 
 if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
-const show = (id) => ["login", "dash", "create", "game"].forEach((k) => $("#" + k).classList.toggle("hide", k !== id));
+const show = (id) => {
+  ["login", "dash", "create", "game"].forEach((k) => $("#" + k).classList.toggle("hide", k !== id));
+  document.body.classList.toggle("play", id === "game");
+};
 let user = null, unsubList = null;
 const gameId = new URLSearchParams(location.search).get("quiz");
 
@@ -365,7 +368,8 @@ async function runGame(id) {
           <div class="pin">${quiz.pin}</div>
           <div style="margin:18px auto;width:216px;background:#fff;padding:8px;border-radius:12px" id="qr"></div>
           <div class="chips" id="chips" style="justify-content:center"></div>
-          <p><button id="start" class="ok" style="font-size:1.4rem;padding:18px 40px">Démarrer</button></p></div>`;
+          <p><button id="start" class="ok" style="font-size:1.4rem;padding:18px 40px">Démarrer</button></p>
+          <p><a class="muted" href="host">← Mes quiz</a></p></div>`;
         if (window.QRCode) new QRCode($("#qr"), { text: url, width: 200, height: 200 });
         $("#start").onclick = () => startQuestion(0);
       }
@@ -374,24 +378,30 @@ async function runGame(id) {
       $("#start").disabled = players.length === 0;
       return;
     }
-    built = null;
+    if (phase !== "question") built = null;
+    const tiles = (extra) => q.choix.map((c, k) => extra(c, k)).join("");
+    const grid = `choices fit host ${fit(Math.max(...q.choix.map((c) => c.length)), 40, 80)}`;
     if (phase === "question") {
-      const left = Math.max(0, Math.ceil((limit - (Date.now() - qStartLocal)) / 1000));
-      g.innerHTML = `<div class="row" style="justify-content:space-between"><span class="muted">Question ${idx + 1}/${questions.length}</span><div class="timer" id="tm">${left}</div><span class="muted">${nbRep()}/${players.length} réponses</span></div>
-        <div class="qtxt center" style="margin:20px 0">${esc(q.texte)}</div>
-        <div class="choices">${q.choix.map((c, k) => `<div class="choice ${COULEURS[k]}"><small>${LETTRES[k]}</small> ${esc(c)}</div>`).join("")}</div>
-        <p class="center"><button id="skip" class="sec">Terminer la question</button></p>`;
+      if (built === "q" + idx) { const n = $("#nr"); if (n) n.textContent = `${nbRep()}/${players.length} réponses`; return; }
+      built = "q" + idx;
+      const used = Date.now() - qStartLocal;
+      g.innerHTML = `<div class="stage">
+        <div class="shead"><span class="pill">Question ${idx + 1}/${questions.length}</span><div class="timer" id="tm">${Math.max(0, Math.ceil((limit - used) / 1000))}</div><span class="pill" id="nr">${nbRep()}/${players.length} réponses</span></div>
+        <div class="tbar"><i id="tb" style="width:${Math.max(0, 100 - (used / limit) * 100)}%"></i></div>
+        <div class="qbox host ${fit(q.texte, 80, 140)}">${esc(q.texte)}</div>
+        <div class="${grid}" data-n="${q.choix.length}">${tiles((c, k) => `<div class="choice ${COULEURS[k]}"><small>${LETTRES[k]}</small><span class="ct">${esc(c)}</span></div>`)}</div>
+        <div class="center"><button id="skip" class="sec sm" type="button">Terminer la question</button></div></div>`;
       $("#skip").onclick = endQuestion;
       return;
     }
     if (phase === "result") {
       const bonne = bonnes[idx];
       const cnt = q.choix.map((_, k) => players.filter((p) => p.reponse?.q === idx && p.reponse.c === k).length);
-      const mx = Math.max(1, ...cnt);
-      g.innerHTML = `<div class="qtxt center" style="margin:10px 0 20px">${esc(q.texte)}</div>
-        <div class="choices">${q.choix.map((c, k) => `<div class="choice ${COULEURS[k]} ${k === bonne ? "right" : "dim"}"><small>${LETTRES[k]}</small> ${esc(c)} ${k === bonne ? "✓" : ""}</div>`).join("")}</div>
-        <div class="card" style="margin-top:16px">${cnt.map((n, k) => `<div class="bar"><i class="${COULEURS[k]}" style="width:${(n / mx) * 100}%;background:var(--${COULEURS[k]})"></i><span>${LETTRES[k]} · ${n}</span></div>`).join("")}</div>
-        <p class="center"><button id="lb">Classement</button></p>`;
+      g.innerHTML = `<div class="stage">
+        <div class="shead"><span class="pill">Question ${idx + 1}/${questions.length}</span><span class="pill">${nbRep()}/${players.length} réponses</span></div>
+        <div class="qbox host ${fit(q.texte, 80, 140)}">${esc(q.texte)}</div>
+        <div class="${grid}" data-n="${q.choix.length}">${tiles((c, k) => `<div class="choice ${COULEURS[k]} ${k === bonne ? "right" : "dim"}"><small>${k === bonne ? "✓" : LETTRES[k]}</small><span class="ct">${esc(c)}</span><b class="cnt">${cnt[k]}</b></div>`)}</div>
+        <div class="center"><button id="lb" class="cta" type="button">Classement →</button></div></div>`;
       $("#lb").onclick = showLeaderboard;
       return;
     }
@@ -410,13 +420,14 @@ async function runGame(id) {
   }
 
   async function startQuestion(i) {
-    idx = i; phase = "question"; qStartLocal = Date.now(); qStartSrv = null;
+    idx = i; phase = "question"; qStartLocal = Date.now(); qStartSrv = null; built = null;
     await updateDoc(qref, { statut: "en_cours", phase, qIndex: i, qStart: serverTimestamp(), correct: null });
     draw();
     clearInterval(timerH);
     timerH = setInterval(() => {
       const left = Math.max(0, Math.ceil((limit - (Date.now() - qStartLocal)) / 1000));
       const t = $("#tm"); if (t) t.textContent = left;
+      const bar = $("#tb"); if (bar) bar.style.width = Math.max(0, 100 - ((Date.now() - qStartLocal) / limit) * 100) + "%";
       if (left <= 0) endQuestion();
     }, 250);
   }
