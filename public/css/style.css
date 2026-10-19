@@ -201,3 +201,31 @@ body.play .wrap{padding:10px 12px calc(10px + env(safe-area-inset-bottom))}
 .res .rk b{display:block;font-size:clamp(2.6rem,15vw,4.2rem);line-height:1.05;font-weight:900}
 .res .rs{font-weight:700;opacity:.95}
 .res button{margin-top:10px}
+
+/* ===== Téléphone joueur (.stage.ph) : question compacte + gros boutons colorés, un seul appui ===== */
+body.play{overscroll-behavior-y:contain;-webkit-tap-highlight-color:transparent}
+.stage.ph{gap:8px;-webkit-user-select:none;user-select:none}
+.stage.ph .pill{padding:4px 12px;font-size:.82rem}
+.stage.ph .timer{width:44px;height:44px;font-size:1.3rem}
+.stage.ph .tbar{height:6px}
+.stage.ph .qbox{display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.1);border-radius:14px;padding:9px 12px;max-height:30%;font-size:clamp(.95rem,4vw,1.15rem);line-height:1.2}
+.stage.ph .qbox.t2{font-size:clamp(.88rem,3.6vw,1.02rem)}
+.stage.ph .qbox.t3{font-size:clamp(.8rem,3.2vw,.92rem)}
+.stage.ph .choices.fit{gap:8px}
+.stage.ph .choices.fit .choice{flex-direction:column;justify-content:center;gap:6px;text-align:center;padding:10px 8px;border-radius:18px;font-size:clamp(1.05rem,5vw,1.4rem);line-height:1.15;box-shadow:0 5px 0 rgba(0,0,0,.25);touch-action:manipulation}
+.stage.ph .choices.fit .choice:active{transform:translateY(4px);box-shadow:0 1px 0 rgba(0,0,0,.25)}
+.stage.ph .choices.fit .choice small{width:30px;height:30px;padding:0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.85rem;background:rgba(0,0,0,.28)}
+.stage.ph .choices.fit .choice .ct{width:100%;overflow-wrap:anywhere;hyphens:auto;-webkit-hyphens:auto}
+/* texte long ou mot long : on réduit la police plutôt que de couper un mot en deux */
+.stage.ph .choices.fit.s .choice{font-size:clamp(1.2rem,6.2vw,1.75rem)}
+.stage.ph .choices.fit.t2 .choice{font-size:clamp(.92rem,4.2vw,1.2rem)}
+.stage.ph .choices.fit.t3 .choice{font-size:clamp(.82rem,3.5vw,1rem)}
+.stage.ph .choices.fit.w1 .choice{font-size:clamp(.88rem,4.2vw,1.15rem)}
+.stage.ph .choices.fit.w2 .choice{font-size:clamp(.78rem,3.4vw,.95rem)}
+.stage.ph .sfoot{padding:8px 12px;font-size:.9rem;border-radius:12px}
+
+/* Mode test du créateur : même écran que le joueur, dans un cadre de téléphone */
+#game.test{max-width:420px;margin:0 auto;padding-top:36px}
+#game.test .stage{height:calc(100vh - 56px);height:calc(100dvh - 56px)}
+.testbar{position:fixed;top:0;left:0;right:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--acc2);color:#2a1200;font-weight:800;font-size:.82rem;padding:6px 12px}
+.testbar button{padding:4px 12px;font-size:.8rem;border-radius:99px;background:#2a1200;color:#fff}

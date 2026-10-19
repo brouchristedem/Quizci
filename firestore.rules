@@ -52,6 +52,25 @@ service cloud.firestore {
         allow read, write: if isAdmin() || isOwner(quizId);
       }
 
+      // Questions SANS les bonnes réponses, en un seul document : 2 lectures par joueur au lieu de 31
+      match /public/{docId} {
+        allow read: if isAdmin() || isOwner(quizId)
+          || quiz(quizId).statut in ['actif', 'en_cours'];
+        allow write: if isAdmin() || isOwner(quizId);
+      }
+
+      // Réservation des pseudos : 1 document par pseudo. Une 2e création du même pseudo est refusée.
+      match /pseudos/{key} {
+        allow get: if signedIn();
+        allow create: if signedIn()
+          && request.resource.data.keys().hasOnly(['uid', 'pseudo'])
+          && request.resource.data.uid == request.auth.uid
+          && quiz(quizId).statut in ['actif', 'en_cours']
+          && quiz(quizId).get('full', false) != true;
+        allow delete: if isAdmin() || isOwner(quizId)
+          || (signedIn() && resource.data.uid == request.auth.uid);
+      }
+
       match /players/{playerId} {
         allow read: if isAdmin() || isOwner(quizId)
           || (signedIn() && request.auth.uid == playerId);

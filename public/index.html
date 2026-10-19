@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Quizci</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -55,16 +55,19 @@
 </div>
 
 <script type="module">
-import { auth, db, $, esc, COULEURS, LETTRES, fit,
-  signInAnonymously, collection, query, where, getDocs, getDoc, setDoc, updateDoc, doc, onSnapshot, orderBy, serverTimestamp } from "./js/fb.js";
+import { auth, db, $, esc, pseudoKey, loadQuestions,
+  signInAnonymously, collection, query, where, getDocs, getDoc, setDoc, updateDoc, deleteDoc, doc, onSnapshot, serverTimestamp } from "./js/fb.js";
+import { footHTML, questionHTML, sentHTML, lateHTML, waitResultHTML, resultHTML, endHTML, waitHTML, kickedHTML } from "./js/ui.js";
+import { ord, fmt } from "./js/util.js";
 
 const params = new URLSearchParams(location.search);
 if (params.get("pin")) $("#pin").value = params.get("pin");
 
 let quizId = null, quiz = null, me = null, questions = [], uid = null, pRef = null;
-let tick = null, built = null;
-const T0 = {}; // instant où chaque question s'est affichée sur ce téléphone
-const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+let tick = null, built = null, hadMe = false, gone = false;
+const T0 = {}; // instant où chaque question s'est affichée sur ce téléphone (gardé aussi après un rechargement)
+const mk = (st) => ({ get: (k) => { try { return st().getItem(k); } catch { return null; } }, set: (k, v) => { try { st().setItem(k, v); } catch {} } });
+const store = mk(() => localStorage), sess = mk(() => sessionStorage);
 $("#pseudo").value = store.get("quizci_pseudo") || "";
 
 const showErr = (m) => { const e = $("#jerr"); e.textContent = m; e.classList.remove("hide"); };
@@ -75,30 +78,49 @@ async function ensureAuth() {
   uid = auth.currentUser.uid;
 }
 
-async function start(id, pseudo, full) {
-  quizId = id;
+// Réserve le pseudo (un document par pseudo : impossible d'en créer deux identiques).
+// Si les règles Firestore ne sont pas encore à jour, on continue sans réservation (l'écran projeté renomme alors les doublons).
+async function reservePseudo(id, key, pseudo) {
+  const ref = doc(db, "quizzes", id, "pseudos", key);
+  try { await setDoc(ref, { uid, pseudo }); return ref; }
+  catch (e) {
+    if (e.code !== "permission-denied") throw e;
+    let s;
+    try { s = await getDoc(ref); } catch { return null; }
+    if (s.exists()) { if (s.data().uid === uid) return ref; throw Object.assign(new Error("pseudo pris"), { taken: true }); }
+    throw e;
+  }
+}
+
+async function start(id, pseudo, full, known) {
+  quizId = id; hadMe = false; gone = false; built = null;
   const qref = doc(db, "quizzes", id);
   pRef = doc(db, "quizzes", id, "players", uid);
-  const snap = await getDoc(pRef);
-  if (!snap.exists()) {
+  if (!known && !(await getDoc(pRef)).exists()) {
     if (full) throw Object.assign(new Error("full"), { full: true });
-    await setDoc(pRef, { pseudo, score: 0, joinedAt: serverTimestamp() });
+    const key = pseudoKey(pseudo);
+    const res = await reservePseudo(id, key, pseudo);
+    try { await setDoc(pRef, { pseudo, pk: key, score: 0, joinedAt: serverTimestamp() }); }
+    catch (e) { if (res) deleteDoc(res).catch(() => {}); throw e; }
   }
-  questions = (await getDocs(query(collection(qref, "questions"), orderBy("ordre")))).docs.map((d) => d.data());
+  questions = (await loadQuestions(id)).list;
   store.set("quizci_quiz", id);
-  ["#join", "#hero", "#promo"].forEach((s) => $(s).classList.add("hide"));
+  ["#join", "#hero", "#promo"].forEach((x) => $(x).classList.add("hide"));
   document.body.classList.add("play");
   $("#game").classList.remove("hide");
   onSnapshot(qref, (s) => { quiz = s.data(); render(); }, () => showEnd("Partie introuvable."));
-  onSnapshot(pRef, (s) => { me = s.data(); render(); });
+  onSnapshot(pRef, (s) => {
+    if (!s.exists()) { if (hadMe) kicked(); return; }
+    hadMe = true; me = s.data(); render();
+  });
 }
 
 $("#go").onclick = async () => {
   $("#jerr").classList.add("hide");
   const pin = $("#pin").value.trim();
-  const pseudo = $("#pseudo").value.trim().slice(0, 15);
+  const pseudo = $("#pseudo").value.trim().replace(/\s+/g, " ").slice(0, 15);
   if (!/^\d{6}$/.test(pin)) return showErr("Le PIN contient 6 chiffres.");
-  if (pseudo.length < 2) return showErr("Choisis un pseudo (2 lettres minimum).");
+  if (pseudo.length < 2 || !pseudoKey(pseudo)) return showErr("Choisis un pseudo (2 caractères minimum, avec au moins une lettre ou un chiffre).");
   $("#go").disabled = true;
   try {
     await ensureAuth();
@@ -109,39 +131,57 @@ $("#go").onclick = async () => {
     await start(res.docs[0].id, pseudo, !!res.docs[0].data().full);
   } catch (e) {
     console.error(e);
-    showErr(e.full ? "Cette partie est complète (200 joueurs maximum)." : e.code === "permission-denied" ? "Impossible de rejoindre : la partie est complète ou fermée." : "Impossible de rejoindre. Vérifie ta connexion et réessaie.");
+    showErr(e.taken ? "Ce pseudo est déjà pris, choisis-en un autre."
+      : e.full ? "Cette partie est complète (200 joueurs maximum)."
+      : e.code === "permission-denied" ? "Impossible de rejoindre : la partie est complète ou fermée."
+      : "Impossible de rejoindre. Vérifie ta connexion et réessaie.");
   } finally { $("#go").disabled = false; }
 };
 
-// Reprise automatique après un rafraîchissement
+// Reprise automatique après un rafraîchissement ou une coupure : même téléphone = même joueur, même score
 (async () => {
   const last = store.get("quizci_quiz");
   if (!last) return;
+  ["#join", "#hero", "#promo"].forEach((x) => $(x).classList.add("hide"));
+  document.body.classList.add("play");
+  $("#game").classList.remove("hide");
+  $("#game").innerHTML = `<div class="stage ph"><div class="sent"><div class="bl">⏳</div><h2>Reconnexion…</h2></div></div>`;
+  const back = () => {
+    $("#game").classList.add("hide"); $("#game").innerHTML = "";
+    document.body.classList.remove("play");
+    ["#join", "#hero", "#promo"].forEach((x) => $(x).classList.remove("hide"));
+  };
   try {
     await ensureAuth();
-    const p = await getDoc(doc(db, "quizzes", last, "players", uid));
-    const qz = await getDoc(doc(db, "quizzes", last));
-    if (p.exists() && qz.exists() && qz.data().statut !== "termine") await start(last, p.data().pseudo);
-  } catch {}
+    const [p, qz] = await Promise.all([getDoc(doc(db, "quizzes", last, "players", uid)), getDoc(doc(db, "quizzes", last))]);
+    if (p.exists() && qz.exists() && qz.data().statut !== "termine") { await start(last, p.data().pseudo, false, true); return; }
+    store.set("quizci_quiz", "");
+  } catch (e) { console.error(e); }
+  back();
 })();
 
 function showEnd(msg) {
-  $("#game").innerHTML = `<div class="stage"><div class="sent"><h2>${esc(msg)}</h2><button class="cta" onclick="location.reload()">Retour</button></div></div>`;
+  $("#game").innerHTML = `<div class="stage ph"><div class="sent"><h2>${esc(msg)}</h2><button class="cta" onclick="location.reload()">Retour</button></div></div>`;
 }
 
-const ord = (n) => (n ? n + (n === 1 ? "er" : "ème") : "–");
-const fmt = (n) => (n || 0).toLocaleString("fr-FR");
+// Le joueur a été exclu par l'animateur
+function kicked() {
+  gone = true; clearInterval(tick);
+  store.set("quizci_quiz", "");
+  built = "kicked";
+  $("#game").innerHTML = `<div class="stage ph">${kickedHTML()}</div>`;
+}
 
 // Remplace l'écran seulement s'il a changé (évite les clignotements et garde le timer stable)
 function put(key, inner) {
   if (built === key) return false;
   built = key;
-  $("#game").innerHTML = `<div class="stage">${inner}</div>`;
+  $("#game").innerHTML = `<div class="stage ph">${inner}</div>`;
   return true;
 }
 // Rang et points viennent de la fiche du quiz (écrits une seule fois par question par l'écran projeté)
 const R = () => (quiz.results || {})[uid] || {};
-const foot = () => `<div class="sfoot"><span>${esc(me.pseudo)}</span><span>${R().rank ? ord(R().rank) + " · " : ""}${fmt(R().score)} pts</span></div>`;
+const foot = () => footHTML(me.pseudo, R());
 
 // Un seul appui sur une réponse : elle est envoyée tout de suite, sans bouton « Valider »
 $("#game").addEventListener("click", async (e) => {
@@ -156,32 +196,29 @@ $("#game").addEventListener("click", async (e) => {
 });
 
 function render() {
-  if (!quiz || !me) return;
+  if (gone || !quiz || !me) return;
   const i = quiz.qIndex ?? -1, q = questions[i];
   if (quiz.phase !== "question") clearInterval(tick);
 
-  // 1. Question : seulement les boutons de réponse, comme sur Kahoot
+  // 1. Question : la question en petit + 4 gros boutons colorés, comme sur Kahoot
   if (quiz.phase === "question" && q) {
     const limit = (quiz.temps || 20) * 1000;
     const sent = me.reponse && me.reponse.q === i;
     if (sent) {
       clearInterval(tick);
-      const c = me.reponse.c;
-      put("a" + i, `<div class="sent ${COULEURS[c] || ""}"><div class="bl">${LETTRES[c] || "✓"}</div><h2>Réponse envoyée</h2><p>Regarde l'écran…</p></div>${foot()}`);
+      put("a" + i, sentHTML(me.reponse.c, foot()));
       return;
     }
+    const k0 = `quizci_t0_${quizId}_${i}`;
+    if (!T0[i]) T0[i] = +sess.get(k0) || 0;
     if (T0[i] && Date.now() - T0[i] >= limit) {
       clearInterval(tick);
-      put("late" + i, `<div class="sent"><div class="bl">⏱</div><h2>Temps écoulé</h2><p>Regarde l'écran…</p></div>${foot()}`);
+      put("late" + i, lateHTML(foot()));
       return;
     }
-    const longest = Math.max(...q.choix.map((c) => c.length));
-    const built_ = put("q" + i, `<div class="shead"><span class="pill">Question ${i + 1}/${questions.length}</span><div class="timer" id="t">${quiz.temps || 20}</div></div>
-      <div class="tbar"><i id="tb"></i></div>
-      <div class="qbox ${fit(q.texte, 80, 140)}">${esc(q.texte)}</div>
-      <div class="choices fit ${fit(longest, 40, 80)}" data-n="${q.choix.length}">${q.choix.map((c, k) => `<button class="choice ${COULEURS[k]}" data-k="${k}" type="button"><small>${LETTRES[k]}</small><span class="ct">${esc(c)}</span></button>`).join("")}</div>${foot()}`);
-    if (built_) {
-      T0[i] = T0[i] || Date.now();
+    const fresh = put("q" + i, questionHTML({ i, total: questions.length, temps: quiz.temps || 20, q, foot: foot() }));
+    if (fresh) {
+      if (!T0[i]) { T0[i] = Date.now(); sess.set(k0, String(T0[i])); }
       clearInterval(tick);
       const step = () => {
         const left = Math.max(0, limit - (Date.now() - T0[i]));
@@ -198,29 +235,22 @@ function render() {
 
   // 2. Résultat de la question (et pendant le classement projeté) : bonne réponse, points, rang
   if (quiz.phase === "result" || quiz.phase === "leaderboard") {
-    if (quiz.resultsQ !== i) { put("rw" + i, `<div class="sent"><div class="bl">…</div><h2>Résultat en cours</h2></div>${foot()}`); return; }
-    const rep = me.reponse && me.reponse.q === i;
+    if (quiz.resultsQ !== i) { put("rw" + i, waitResultHTML(foot())); return; }
     const r = R();
-    put(`r${i}|${r.rank}|${r.score}`, `<div class="res ${r.ok ? "ok" : rep ? "ko" : "none"}">
-      <div class="rt">${r.ok ? "Bonne réponse !" : rep ? "Raté…" : "Pas de réponse"}</div>
-      <div class="rp">${r.ok ? "+" + fmt(r.last) + " pts" : "0 pt"}</div>
-      <div class="rk"><small>Ton classement</small><b>${ord(r.rank)}</b></div>
-      <div class="rs">${fmt(r.score)} pts au total</div></div>${foot()}`);
+    put(`r${i}|${r.rank}|${r.score}`, resultHTML({ answered: !!(me.reponse && me.reponse.q === i), r, foot: foot() }));
     return;
   }
 
   // 3. Fin de partie
   if (quiz.phase === "podium" || quiz.statut === "termine") {
     store.set("quizci_quiz", "");
-    put(`end|${R().rank}|${R().score}`, `<div class="res fin"><div class="rt">Partie terminée</div>
-      <div class="rk"><small>Ton classement final</small><b>${ord(R().rank)}</b></div>
-      <div class="rs">${fmt(R().score)} pts</div>
-      <button class="cta" onclick="location.reload()">Rejouer avec un autre PIN</button></div>${foot()}`);
+    const r = R();
+    put(`end|${r.rank}|${r.score}`, endHTML({ r, foot: foot(), button: `<button class="cta" onclick="location.reload()">Rejouer avec un autre PIN</button>` }));
     return;
   }
 
   // 4. Salle d'attente
-  put("w", `<div class="sent"><div class="bl">🎮</div><h2>Tu es dans la partie !</h2><p>Regarde l'écran, ça va bientôt commencer.</p></div>${foot()}`);
+  put("w", waitHTML(foot()));
 }
 </script>
 </body>

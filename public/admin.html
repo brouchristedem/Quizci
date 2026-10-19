@@ -145,7 +145,7 @@ async function activer(id) {
 
 // Supprime le quiz et ses sous-collections (sinon elles restent orphelines dans Firestore)
 async function supprimer(id) {
-  for (const sub of ["questions", "players", "private"]) {
+  for (const sub of ["questions", "players", "pseudos", "public", "private"]) {
     const docs = (await getDocs(collection(db, "quizzes", id, sub))).docs;
     for (let i = 0; i < docs.length; i += 400) {
       const batch = writeBatch(db);

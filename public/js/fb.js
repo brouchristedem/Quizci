@@ -1,7 +1,7 @@
 // Config Firebase (publique) + exports partagés
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-import { getFirestore } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import { getFirestore, doc, getDoc, getDocs, setDoc, collection, query, orderBy } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 export * from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 export * from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
@@ -24,9 +24,22 @@ const app = initializeApp({
 
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-export const $ = (s, r = document) => r.querySelector(s);
-export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-export const COULEURS = ["c0", "c1", "c2", "c3"];
-export const LETTRES = ["A", "B", "C", "D"];
-// Taille de police adaptée à la longueur du texte : "" (court), "t2" (moyen), "t3" (long)
-export const fit = (t, a = 80, b = 140) => { const n = String(t ?? "").length; return n > b ? "t3" : n > a ? "t2" : ""; };
+// Utilitaires partagés (définis dans util.js, ré-exportés ici pour les imports existants)
+export { $, esc, COULEURS, LETTRES, fit, ord, fmt, points, pseudoKey } from "./util.js";
+
+// Les questions (sans les bonnes réponses) sont lues en UN seul document : 2 lectures par joueur au lieu de 31.
+// Anciens quiz : repli sur la sous-collection « questions ».
+export async function loadQuestions(quizId) {
+  try {
+    const s = await getDoc(doc(db, "quizzes", quizId, "public", "questions"));
+    if (s.exists() && Array.isArray(s.data().list)) return { list: s.data().list, fromDoc: true };
+  } catch (e) { /* règles pas encore à jour : on lit l'ancienne collection */ }
+  const snap = await getDocs(query(collection(db, "quizzes", quizId, "questions"), orderBy("ordre")));
+  return { list: snap.docs.map((d) => d.data()), fromDoc: false };
+}
+export const publicQuestions = (list) => ({ list: list.map((q) => ({ texte: q.texte, choix: q.choix })) });
+// Écriture « au mieux » : ne bloque jamais l'enregistrement ni le lancement d'un quiz
+export async function savePublicQuestions(quizId, list) {
+  try { await setDoc(doc(db, "quizzes", quizId, "public", "questions"), publicQuestions(list)); return true; }
+  catch (e) { console.warn("public/questions non écrit", e.code || e); return false; }
+}

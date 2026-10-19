@@ -35,7 +35,31 @@ Sans la ligne de commande : colle le contenu de `firestore.rules` dans Firebase 
 
 ## Quotas gratuits à surveiller
 
-Le plan Spark limite les lectures et écritures Firestore par jour (voir la page de tarification Firebase). Les téléphones des joueurs n'écoutent que l'état du jeu et leur propre fiche, pour limiter les lectures.
+Le plan Spark limite Firestore à environ 50 000 lectures et 20 000 écritures par jour. Ce qui coûte, pour une partie de 200 joueurs et 30 questions :
+
+- Écritures : 1 par joueur et par question (la réponse) + 1 à l'arrivée, soit environ 6 300. Le classement et les points sont écrits une seule fois par question, dans la fiche du quiz.
+- Lectures : chaque changement de phase (début et fin de question) est lu par chaque joueur, soit environ 12 000, plus environ 6 000 pour l'écran projeté (une lecture par réponse). Les questions sont lues en un seul document (`public/questions`) : 2 lectures par joueur au lieu de 31.
+- Total : environ 19 000 lectures et 6 300 écritures. Deux très grosses parties par jour passent, trois non. Une classe de 40 joueurs et 15 questions en coûte environ 1 400 lectures.
+
+## Règles Firestore
+
+Après chaque modification de `firestore.rules`, il faut les republier (Firebase Console → Firestore → Règles → Publier, ou `firebase deploy --only firestore:rules`). Le déploiement du site sur Vercel ne les met pas à jour. Si les règles ne sont pas à jour, le site continue de fonctionner (les pseudos en double sont alors renommés par l'écran projeté, et les questions sont lues une par une), mais sans les économies de lectures.
+
+## Pseudos et reconnexion
+
+- Un pseudo est réservé à l'arrivée (document `pseudos/{clé}`) : « Léa », « lea » et « LÉA » sont le même pseudo. L'exclusion d'un joueur libère son pseudo.
+- Si un joueur actualise la page ou perd sa connexion, il retrouve sa place, son score et le chrono de la question en cours (même téléphone, même navigateur).
+
+## Mode test (créateur)
+
+Bouton « Tester » dans l'éditeur et « Tester gratuitement » sur chaque quiz : le créateur joue son quiz sur l'écran téléphone, avec le chrono et les points, et voit la bonne réponse après chaque question. Rien n'est écrit dans Firestore.
+
+## Tests
+
+```
+node test/parser.test.mjs
+node test/util.test.mjs
+```
 
 ## À ajouter plus tard
 
