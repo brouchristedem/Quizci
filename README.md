@@ -30,6 +30,7 @@ Sans la ligne de commande : colle le contenu de `firestore.rules` dans Firebase 
 
 1. Le teacher crée son quiz (statut `brouillon`) et clique sur « Activer mon quiz » : WhatsApp s'ouvre avec le message prérempli (titre + ID).
 2. Tu lui envoies ton lien de paiement Wave.
+(Admin : sur un quiz terminé, « Réactiver » le remet en salle d'attente (joueurs et classement effacés), « Classement » affiche les points de la partie.)
 3. Paiement reçu : dans `/admin`, tu cliques sur « Rendre actif ». Un PIN est généré.
 4. Le teacher clique sur « Lancer la partie », projette l'écran, les joueurs rejoignent.
 

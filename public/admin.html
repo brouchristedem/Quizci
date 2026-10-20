@@ -34,6 +34,14 @@
   .qa-actions .act{flex:1 1 auto}
   .qa-actions .del{flex:0 0 auto;background:transparent;border:2px solid var(--ko);color:#ffd0da}
   .empty{text-align:center;padding:28px 12px}
+  .qa-actions .sec{flex:1 1 auto;background:rgba(255,255,255,.1);border:2px solid var(--line);color:#fff}
+  .ov{position:fixed;inset:0;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;padding:16px;z-index:50}
+  .ov .box{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:18px;width:100%;max-width:480px;max-height:86vh;overflow:auto}
+  .rk{display:flex;align-items:center;gap:12px;padding:10px 4px;border-bottom:1px solid var(--line)}
+  .rk .n{flex:0 0 2.2rem;font-weight:800;color:var(--mut);text-align:center}
+  .rk:nth-child(-n+3) .n{color:#fff}
+  .rk .p{flex:1;min-width:0;overflow-wrap:anywhere;font-weight:700}
+  .rk .s{font-weight:800;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -56,7 +64,7 @@
 <script type="module">
 import { auth, db, $, esc, ADMIN_EMAIL, PRIX,
   GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged,
-  collection, query, where, getDocs, updateDoc, deleteDoc, writeBatch, doc, onSnapshot, serverTimestamp } from "./js/fb.js";
+  collection, query, where, getDocs, updateDoc, deleteDoc, writeBatch, doc, onSnapshot, serverTimestamp, deleteField } from "./js/fb.js";
 
 const LABEL = { brouillon: "À activer", actif: "Actif", en_cours: "En cours", termine: "Terminé" };
 const RANK = { brouillon: 0, actif: 1, en_cours: 1, termine: 2 };
@@ -90,7 +98,9 @@ function card(q) {
   if (q.statut === "brouillon") {
     actions = `<div class="qa-actions"><button class="ok act" type="button" data-act="on" data-id="${esc(q.id)}">Rendre actif</button><button class="del" type="button" data-act="del" data-id="${esc(q.id)}">Supprimer</button></div>`;
   } else if (q.statut === "termine") {
-    actions = `<div class="qa-actions"><button class="del act" type="button" data-act="del" data-id="${esc(q.id)}">Supprimer</button></div>`;
+    actions = `<div class="qa-actions"><button class="ok act" type="button" data-act="re" data-id="${esc(q.id)}">Réactiver</button><button class="sec" type="button" data-act="rank" data-id="${esc(q.id)}">Classement</button><button class="del" type="button" data-act="del" data-id="${esc(q.id)}">Supprimer</button></div>`;
+  } else if (q.statut === "en_cours") {
+    actions = `<div class="qa-actions"><button class="sec act" type="button" data-act="rank" data-id="${esc(q.id)}">Classement</button></div>`;
   }
   return `<article class="qa">
     <div class="qa-top"><div class="qa-title">${esc(q.titre || "(sans titre)")}</div><span class="badge ${esc(q.statut)}">${esc(LABEL[q.statut] || q.statut || "?")}</span></div>
@@ -125,12 +135,20 @@ $("#list").addEventListener("click", async (e) => {
       if (!confirm(`Paiement de ${PRIX} F reçu pour « ${q.titre || "ce quiz"} » ? Le quiz sera activé.`)) return;
       b.disabled = true; b.textContent = "Activation…";
       await activer(q.id);
+    } else if (b.dataset.act === "re") {
+      if (!confirm(`Réactiver « ${q.titre || "ce quiz"} » ?\n\nLe quiz repasse en salle d'attente (même PIN si libre). Le classement et les joueurs de la partie précédente sont effacés. Regarde-les d'abord avec « Classement » si besoin.`)) return;
+      b.disabled = true; b.textContent = "Réactivation…";
+      await reactiver(q);
+    } else if (b.dataset.act === "rank") {
+      b.disabled = true; b.textContent = "Chargement…";
+      await classement(q);
     } else if (b.dataset.act === "del") {
       if (!confirm(`Supprimer définitivement « ${q.titre || "ce quiz"} » ?`)) return;
       b.disabled = true; b.textContent = "Suppression…";
       await supprimer(q.id);
     }
-  } catch (er) { console.error(er); alert(er.message); b.disabled = false; b.textContent = label; }
+  } catch (er) { console.error(er); alert(er.message); }
+  b.disabled = false; b.textContent = label;
 });
 
 async function activer(id) {
@@ -141,6 +159,49 @@ async function activer(id) {
     if (dup.empty) break;
   }
   await updateDoc(doc(db, "quizzes", id), { statut: "actif", pin, phase: "lobby", qIndex: -1, activatedAt: serverTimestamp() });
+}
+
+// Efface tous les documents d'une sous-collection du quiz
+async function vider(id, sub) {
+  const docs = (await getDocs(collection(db, "quizzes", id, sub))).docs;
+  for (let i = 0; i < docs.length; i += 400) {
+    const batch = writeBatch(db);
+    docs.slice(i, i + 400).forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+  }
+}
+
+// Remet un quiz terminé en salle d'attente, prêt à être relancé par son créateur (« Lancer la partie »)
+async function reactiver(q) {
+  await vider(q.id, "players"); await vider(q.id, "pseudos");
+  let pin = q.pin;
+  for (let n = 0; n < 10; n++) {
+    if (pin) {
+      const dup = await getDocs(query(collection(db, "quizzes"), where("pin", "==", pin), where("statut", "in", ["actif", "en_cours"])));
+      if (dup.empty) break;
+    }
+    pin = String(Math.floor(100000 + Math.random() * 900000));
+  }
+  await updateDoc(doc(db, "quizzes", q.id), {
+    statut: "actif", pin, phase: "lobby", qIndex: -1,
+    results: deleteField(), resultsQ: deleteField(), correct: deleteField(), qStart: deleteField(), full: deleteField(),
+    activatedAt: serverTimestamp(),
+  });
+}
+
+// Classement d'une partie : les points sont dans la fiche du quiz, les pseudos dans les joueurs (une lecture par joueur, à la demande)
+async function classement(q) {
+  const players = (await getDocs(collection(db, "quizzes", q.id, "players"))).docs.map((d) => ({ id: d.id, pseudo: d.data().pseudo }));
+  const res = q.results || {};
+  const rows = players.map((p) => ({ pseudo: p.pseudo || "?", score: res[p.id]?.score || 0 })).sort((a, b) => b.score - a.score);
+  const ov = document.createElement("div");
+  ov.className = "ov";
+  ov.innerHTML = `<div class="box"><div class="qa-top"><div class="qa-title">Classement · ${esc(q.titre || "")}</div><button class="sec" type="button" style="min-height:40px">Fermer</button></div>
+    <div class="qa-meta" style="margin:6px 0 10px">${rows.length} joueur${rows.length > 1 ? "s" : ""}${q.statut === "en_cours" ? " · partie en cours" : ""}</div>
+    ${rows.length ? rows.map((r, i) => `<div class="rk"><span class="n">${i + 1}</span><span class="p">${esc(r.pseudo)}</span><span class="s">${r.score.toLocaleString("fr-FR")} pts</span></div>`).join("") : `<p class="muted">Aucun joueur enregistré pour cette partie.</p>`}</div>`;
+  const close = () => ov.remove();
+  ov.addEventListener("click", (e) => { if (e.target === ov || e.target.closest("button")) close(); });
+  document.body.appendChild(ov);
 }
 
 // Supprime le quiz et ses sous-collections (sinon elles restent orphelines dans Firestore)

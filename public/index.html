@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Quizci</title>
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js">
+<link rel="modulepreload" href="js/fb.js">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -55,7 +62,7 @@
 </div>
 
 <script type="module">
-import { auth, db, $, esc, pseudoKey, loadQuestions,
+import { auth, db, retry, $, esc, pseudoKey, loadQuestions,
   signInAnonymously, collection, query, where, getDocs, getDoc, setDoc, updateDoc, deleteDoc, doc, onSnapshot, serverTimestamp } from "./js/fb.js";
 import { footHTML, questionHTML, sentHTML, lateHTML, waitResultHTML, resultHTML, endHTML, waitHTML, kickedHTML } from "./js/ui.js";
 import { ord, fmt } from "./js/util.js";
@@ -72,11 +79,20 @@ $("#pseudo").value = store.get("quizci_pseudo") || "";
 
 const showErr = (m) => { const e = $("#jerr"); e.textContent = m; e.classList.remove("hide"); };
 
-async function ensureAuth() {
-  await auth.authStateReady();
-  if (!auth.currentUser) await signInAnonymously(auth);
-  uid = auth.currentUser.uid;
+let authP = null;
+function ensureAuth() {
+  // Une seule connexion à la fois, relancée automatiquement si le réseau traîne
+  if (!authP) authP = retry(async () => {
+    await auth.authStateReady();
+    if (!auth.currentUser) await signInAnonymously(auth);
+    uid = auth.currentUser.uid;
+  }, { ms: 10000, tries: 3 }).catch((e) => { authP = null; throw e; });
+  return authP;
 }
+// On se connecte en arrière-plan dès que le joueur touche un champ : quand il appuie sur « Jouer », c'est déjà prêt
+["pin", "pseudo"].forEach((id) => $("#" + id).addEventListener("focus", () => { ensureAuth().catch(() => {}); }, { once: true }));
+// iPhone : au retour sur la page (ou page restaurée depuis le cache), les connexions sont mortes → on repart proprement
+addEventListener("pageshow", (e) => { if (e.persisted) location.reload(); });
 
 // Réserve le pseudo (un document par pseudo : impossible d'en créer deux identiques).
 // Si les règles Firestore ne sont pas encore à jour, on continue sans réservation (l'écran projeté renomme alors les doublons).
@@ -121,11 +137,11 @@ $("#go").onclick = async () => {
   const pseudo = $("#pseudo").value.trim().replace(/\s+/g, " ").slice(0, 15);
   if (!/^\d{6}$/.test(pin)) return showErr("Le PIN contient 6 chiffres.");
   if (pseudo.length < 2 || !pseudoKey(pseudo)) return showErr("Choisis un pseudo (2 caractères minimum, avec au moins une lettre ou un chiffre).");
-  $("#go").disabled = true;
+  $("#go").disabled = true; $("#go").textContent = "Connexion…";
   try {
     await ensureAuth();
     const q = query(collection(db, "quizzes"), where("pin", "==", pin), where("statut", "in", ["actif", "en_cours"]));
-    const res = await getDocs(q);
+    const res = await retry(() => getDocs(q), { ms: 10000, tries: 3 });
     if (res.empty) { showErr("PIN introuvable, ou le quiz n'est pas encore actif."); return; }
     store.set("quizci_pseudo", pseudo);
     await start(res.docs[0].id, pseudo, !!res.docs[0].data().full);
@@ -134,8 +150,9 @@ $("#go").onclick = async () => {
     showErr(e.taken ? "Ce pseudo est déjà pris, choisis-en un autre."
       : e.full ? "Cette partie est complète (200 joueurs maximum)."
       : e.code === "permission-denied" ? "Impossible de rejoindre : la partie est complète ou fermée."
+      : e.code === "timeout" ? "Connexion trop lente. Vérifie ton réseau puis appuie à nouveau sur Jouer."
       : "Impossible de rejoindre. Vérifie ta connexion et réessaie.");
-  } finally { $("#go").disabled = false; }
+  } finally { $("#go").disabled = false; $("#go").textContent = "Jouer"; }
 };
 
 // Reprise automatique après un rafraîchissement ou une coupure : même téléphone = même joueur, même score
@@ -153,7 +170,7 @@ $("#go").onclick = async () => {
   };
   try {
     await ensureAuth();
-    const [p, qz] = await Promise.all([getDoc(doc(db, "quizzes", last, "players", uid)), getDoc(doc(db, "quizzes", last))]);
+    const [p, qz] = await retry(() => Promise.all([getDoc(doc(db, "quizzes", last, "players", uid)), getDoc(doc(db, "quizzes", last))]), { ms: 10000, tries: 2 });
     if (p.exists() && qz.exists() && qz.data().statut !== "termine") { await start(last, p.data().pseudo, false, true); return; }
     store.set("quizci_quiz", "");
   } catch (e) { console.error(e); }

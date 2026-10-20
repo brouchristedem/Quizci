@@ -1,7 +1,7 @@
 // Config Firebase (publique) + exports partagés
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
-import { getAuth } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
-import { getFirestore, doc, getDoc, getDocs, setDoc, collection, query, orderBy } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+import { getAuth, initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence, browserPopupRedirectResolver } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import { initializeFirestore, doc, getDoc, getDocs, setDoc, collection, query, orderBy } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 export * from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 export * from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
@@ -22,8 +22,27 @@ const app = initializeApp({
   appId: "1:604552376710:web:09805c8548e3372f99fc07",
 });
 
-export const auth = getAuth(app);
-export const db = getFirestore(app);
+// Auth : si IndexedDB est bloqué (navigation privée iPhone), on retombe sur le stockage local puis sur la session
+export const auth = (() => {
+  try { return initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence], popupRedirectResolver: browserPopupRedirectResolver }); }
+  catch { return getAuth(app); }
+})();
+// Firestore : détecte tout seul les réseaux/navigateurs où le flux temps réel reste bloqué (Safari iPhone, réseaux mobiles,
+// proxys) et bascule en « long polling ». C'est ce qui évitait de devoir actualiser la page.
+export const db = initializeFirestore(app, { experimentalAutoDetectLongPolling: true, useFetchStreams: false });
+
+// Relance une opération réseau qui traîne : essaie jusqu'à `tries` fois, chaque essai limité à `ms` millisecondes.
+export function retry(fn, { ms = 12000, tries = 2 } = {}) {
+  let n = 0;
+  const go = () => new Promise((ok, ko) => {
+    const t = setTimeout(() => ko(Object.assign(new Error("timeout"), { code: "timeout" })), ms);
+    Promise.resolve().then(fn).then((v) => { clearTimeout(t); ok(v); }, (e) => { clearTimeout(t); ko(e); });
+  }).catch((e) => {
+    if (++n < tries && (e.code === "timeout" || e.code === "unavailable" || e.code === "auth/network-request-failed")) return go();
+    throw e;
+  });
+  return go();
+}
 // Utilitaires partagés (définis dans util.js, ré-exportés ici pour les imports existants)
 export { $, esc, COULEURS, LETTRES, fit, ord, fmt, points, pseudoKey } from "./util.js";
 
