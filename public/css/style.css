@@ -64,7 +64,9 @@ button:disabled{opacity:.45;cursor:not-allowed;transform:none}
 .warnbox ul{margin:6px 0 0;padding-left:18px}
 .good{color:#b7f5df}
 .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
-.row>*{flex:0 0 auto}
+.row>*{flex:0 1 auto;max-width:100%;min-width:0}
+.row button,.row .btn{white-space:normal;overflow-wrap:anywhere}
+@media (max-width:520px){.row>.btn,.row>button.sm{flex:1 1 100%}}
 .grow{flex:1 1 auto!important}
 .hide{display:none!important}
 .center{text-align:center}
