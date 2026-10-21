@@ -62,6 +62,7 @@ service cloud.firestore {
       // Réservation des pseudos : 1 document par pseudo. Une 2e création du même pseudo est refusée.
       match /pseudos/{key} {
         allow get: if signedIn();
+        allow list: if isAdmin() || isOwner(quizId);
         allow create: if signedIn()
           && request.resource.data.keys().hasOnly(['uid', 'pseudo'])
           && request.resource.data.uid == request.auth.uid
