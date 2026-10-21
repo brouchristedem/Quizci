@@ -163,7 +163,9 @@ async function activer(id) {
 
 // Efface tous les documents d'une sous-collection du quiz
 async function vider(id, sub) {
-  const docs = (await getDocs(collection(db, "quizzes", id, sub))).docs;
+  let docs;
+  try { docs = (await getDocs(collection(db, "quizzes", id, sub))).docs; }
+  catch (e) { if (e.code === "permission-denied" && ["pseudos", "public"].includes(sub)) return; throw e; } // règles Firestore pas encore republiées
   for (let i = 0; i < docs.length; i += 400) {
     const batch = writeBatch(db);
     docs.slice(i, i + 400).forEach((d) => batch.delete(d.ref));
@@ -206,14 +208,7 @@ async function classement(q) {
 
 // Supprime le quiz et ses sous-collections (sinon elles restent orphelines dans Firestore)
 async function supprimer(id) {
-  for (const sub of ["questions", "players", "pseudos", "public", "private"]) {
-    const docs = (await getDocs(collection(db, "quizzes", id, sub))).docs;
-    for (let i = 0; i < docs.length; i += 400) {
-      const batch = writeBatch(db);
-      docs.slice(i, i + 400).forEach((d) => batch.delete(d.ref));
-      await batch.commit();
-    }
-  }
+  for (const sub of ["questions", "players", "pseudos", "public", "private"]) await vider(id, sub);
   await deleteDoc(doc(db, "quizzes", id));
 }
 </script>
