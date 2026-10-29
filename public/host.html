@@ -16,6 +16,7 @@
   <div class="nav">
     <a href="host" class="logo">Quiz<b>ci</b></a>
     <div id="side" class="side hide">
+      <a id="adminlink" href="admin" class="btn out hide">Admin</a>
       <div class="who"><i id="av">T</i><span id="uname"></span></div>
       <button id="out" class="out" type="button">Déconnexion</button>
     </div>
@@ -123,7 +124,7 @@
 </div>
 
 <script type="module">
-import { auth, db, $, esc, COULEURS, LETTRES, fit, points, pseudoKey, loadQuestions, savePublicQuestions, ADMIN_WHATSAPP, PRIX, MAX_QUESTIONS, MAX_PLAYERS,
+import { auth, db, $, esc, COULEURS, LETTRES, fit, points, pseudoKey, loadQuestions, savePublicQuestions, ADMIN_WHATSAPP, PRIX, MAX_QUESTIONS, MAX_PLAYERS, ADMIN_EMAIL,
   GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged,
   collection, query, where, orderBy, getDoc, getDocs, addDoc, updateDoc, deleteDoc, writeBatch, setDoc, doc, onSnapshot, serverTimestamp } from "./js/fb.js";
 import { parseQuiz } from "./js/parser.js";
@@ -149,6 +150,7 @@ onAuthStateChanged(auth, (u) => {
   $("#side").classList.toggle("hide", !user);
   if (!user) { show("login"); return; }
   const nom = user.displayName || user.email || "Teacher";
+  $("#adminlink").classList.toggle("hide", !(user.emailVerified && String(user.email || "").toLowerCase() === ADMIN_EMAIL.toLowerCase()));
   $("#uname").textContent = nom;
   $("#av").textContent = nom.trim().charAt(0).toUpperCase();
   if (gameId) { runGame(gameId); return; }

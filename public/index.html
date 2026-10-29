@@ -36,7 +36,10 @@
 <div class="wrap center">
   <div class="nav">
     <div class="logo">Quiz<b>ci</b></div>
-    <a href="host" class="btn out">Créer mon Quiz</a>
+    <div class="side">
+      <a id="adminlink" href="admin" class="btn out hide">Admin</a>
+      <a href="host" class="btn out">Créer mon Quiz</a>
+    </div>
   </div>
 
   <div id="hero" class="hero">
@@ -78,13 +81,20 @@
   </section>
 
   <p class="foot">Quizci · Quiz en direct pour les groupes, les équipes et les événements</p>
+  <p class="foot" style="margin-top:8px">Service client : <a href="tel:+2250545177571" style="color:inherit;font-weight:700">+225 05 45 17 75 71</a> · <a href="https://wa.me/2250545177571" target="_blank" rel="noopener" style="color:inherit;font-weight:700">WhatsApp</a> · <a href="a-propos" style="color:inherit;font-weight:700">À propos</a></p>
 </div>
 
 <script type="module">
-import { auth, db, retry, $, esc, pseudoKey, loadQuestions,
-  signInAnonymously, collection, query, where, getDocs, getDoc, setDoc, updateDoc, deleteDoc, doc, onSnapshot, serverTimestamp } from "./js/fb.js";
+import { auth, db, retry, $, esc, pseudoKey, loadQuestions, ADMIN_EMAIL,
+  signInAnonymously, onAuthStateChanged, collection, query, where, getDocs, getDoc, setDoc, updateDoc, deleteDoc, doc, onSnapshot, serverTimestamp } from "./js/fb.js";
 import { footHTML, questionHTML, sentHTML, lateHTML, waitResultHTML, resultHTML, endHTML, waitHTML, kickedHTML } from "./js/ui.js";
 import { ord, fmt } from "./js/util.js";
+
+// Lien « Admin » : visible seulement pour le propriétaire connecté avec Google (l'autorisation réelle reste dans firestore.rules)
+onAuthStateChanged(auth, (u) => {
+  const ok = !!(u && !u.isAnonymous && u.emailVerified && String(u.email || "").toLowerCase() === ADMIN_EMAIL.toLowerCase());
+  $("#adminlink").classList.toggle("hide", !ok);
+});
 
 const params = new URLSearchParams(location.search);
 if (params.get("pin")) $("#pin").value = params.get("pin");
