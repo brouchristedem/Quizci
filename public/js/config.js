@@ -12,4 +12,4 @@ export const ADMIN_EMAIL = "brouchristedem@gmail.com";
 // TODO : mets ton numéro WhatsApp (indicatif pays + numéro, sans "+" ni espaces). Ex : 2250700000000
 export const ADMIN_WHATSAPP = "225XXXXXXXXXX";
 export const PRICE_FCFA = 500;
-export const MAX_QUESTIONS = 20;
+export const MAX_QUESTIONS = 30;
