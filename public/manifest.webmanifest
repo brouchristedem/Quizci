@@ -1,0 +1,19 @@
+{
+  "name": "Quizci",
+  "short_name": "Quizci",
+  "description": "Le quiz en direct pour les classes et les événements. Les joueurs répondent depuis leur téléphone.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#150a42",
+  "theme_color": "#46178F",
+  "lang": "fr",
+  "categories": ["education", "games"],
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
