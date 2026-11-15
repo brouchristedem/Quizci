@@ -4,7 +4,7 @@ Site de quiz en direct façon Kahoot, pensé pour le public africain. Stack 100 
 
 ## Avant le premier déploiement
 
-1. Ouvre `public/js/config.js` et remplace `ADMIN_WHATSAPP` par ton numéro WhatsApp (indicatif + numéro, sans `+` ni espaces).
+1. Vérifie `ADMIN_WHATSAPP` dans `public/js/fb.js` (utilisé par `/host`) et dans `public/js/config.js` (utilisé par `/teacher`) : numéro WhatsApp avec indicatif, sans `+` ni espaces. Tarif actuel : 500 F par quiz (`PRIX` dans `fb.js`, `PRICE_FCFA` dans `config.js`), jusqu'à 30 questions et 200 joueurs par partie.
 2. Dans Firebase Console, Authentication → Settings → Authorized domains : vérifie que `quizci.web.app` est présent (il l'est par défaut).
 
 ## Déployer (une seule fois, puis à chaque modification)
@@ -22,8 +22,8 @@ Sans la ligne de commande : colle le contenu de `firestore.rules` dans Firebase 
 ## Pages
 
 - `/` : les joueurs (PIN + pseudo, ou `/?pin=123456` via QR code / lien WhatsApp)
-- `/teacher` : connexion Google, création de quiz (import PDF, texte collé ou saisie manuelle)
-- `/host?q=ID` : écran de projection (PIN, QR, questions, classement, podium)
+- `/host` : espace créateur (connexion Google, création de quiz par import PDF, texte collé ou saisie manuelle, activation à 500 F) ; avec `?q=ID`, écran de projection (PIN, QR, questions, classement, podium). C'est la page vers laquelle pointe le site.
+- `/teacher` : ancienne version de l'espace créateur, qui n'est plus liée depuis le site
 - `/admin` : tableau de bord, réservé à `brouchristedem@gmail.com`, bouton « Rendre actif »
 
 ## Parcours d'un quiz
