@@ -1,12 +1,21 @@
 // Écrans du téléphone (joueur). Utilisés par la vraie partie (index.html) ET par le mode test du créateur (host.html),
 // pour que le test montre exactement ce que verront les joueurs.
-import { esc, COULEURS, LETTRES, fit, ord, fmt } from "./util.js";
+import { esc, COULEURS, LETTRES, FORMES, NOMS_COULEURS, fit, ord, fmt } from "./util.js";
 
 export const footHTML = (pseudo, r = {}) =>
   `<div class="sfoot"><span>${esc(pseudo)}</span><span>${r.rank ? ord(r.rank) + " · " : ""}${fmt(r.score)} pts</span></div>`;
 
 // Question : minuscule rappel de la question + 4 gros boutons colorés. Un seul appui = réponse envoyée.
-export function questionHTML({ i, total, temps, q, foot }) {
+// couleurs = true (mode projection) : ni la question ni les réponses ne s'affichent sur le téléphone, seulement
+// les couleurs et les formes. Le joueur lit l'écran projeté, ce qui empêche de chercher la réponse sur internet.
+export function questionHTML({ i, total, temps, q, foot, couleurs }) {
+  if (couleurs) {
+    return `<div class="shead"><span class="pill">Question ${i + 1}/${total}</span><div class="timer" id="t">${temps}</div></div>
+    <div class="tbar"><i id="tb"></i></div>
+    <div class="hint">Regarde l'écran, touche la bonne couleur</div>
+    <div class="choices fit cm" data-n="${q.choix.length}">${q.choix.map((_, k) =>
+      `<button class="choice ${COULEURS[k]}" data-k="${k}" type="button" aria-label="${NOMS_COULEURS[k]}"><span class="forme">${FORMES[k]}</span></button>`).join("")}</div>${foot}`;
+  }
   const longest = Math.max(...q.choix.map((c) => c.length));
   const word = Math.max(...q.choix.flatMap((c) => c.split(/\s+/).map((w) => w.length)));
   const w = word > 14 ? " w2" : word > 10 ? " w1" : longest <= 14 ? " s" : "";
@@ -17,8 +26,8 @@ export function questionHTML({ i, total, temps, q, foot }) {
       `<button class="choice ${COULEURS[k]}" data-k="${k}" type="button"><small>${LETTRES[k]}</small><span class="ct">${esc(c)}</span></button>`).join("")}</div>${foot}`;
 }
 
-export const sentHTML = (c, foot) =>
-  `<div class="sent ${COULEURS[c] || ""}"><div class="bl">${LETTRES[c] || "✓"}</div><h2>Réponse envoyée</h2><p>Regarde l'écran…</p></div>${foot}`;
+export const sentHTML = (c, foot, couleurs) =>
+  `<div class="sent ${COULEURS[c] || ""}"><div class="bl">${(couleurs ? FORMES[c] : LETTRES[c]) || "✓"}</div><h2>Réponse envoyée</h2><p>Regarde l'écran…</p></div>${foot}`;
 
 export const lateHTML = (foot) =>
   `<div class="sent"><div class="bl">⏱</div><h2>Temps écoulé</h2><p>Regarde l'écran…</p></div>${foot}`;

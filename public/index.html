@@ -250,6 +250,7 @@ $("#game").addEventListener("click", async (e) => {
 function render() {
   if (gone || !quiz || !me) return;
   const i = quiz.qIndex ?? -1, q = questions[i];
+  const cm = !!quiz.modeCouleurs; // mode projection : le téléphone n'affiche que les couleurs, sans les textes
   if (quiz.phase !== "question") clearInterval(tick);
 
   // 1. Question : la question en petit + 4 gros boutons colorés, comme sur Kahoot
@@ -258,7 +259,7 @@ function render() {
     const sent = me.reponse && me.reponse.q === i;
     if (sent) {
       clearInterval(tick);
-      put("a" + i, sentHTML(me.reponse.c, foot()));
+      put("a" + i + (cm ? "c" : ""), sentHTML(me.reponse.c, foot(), cm));
       return;
     }
     const k0 = `quizci_t0_${quizId}_${i}`;
@@ -268,7 +269,7 @@ function render() {
       put("late" + i, lateHTML(foot()));
       return;
     }
-    const fresh = put("q" + i, questionHTML({ i, total: questions.length, temps: quiz.temps || 20, q, foot: foot() }));
+    const fresh = put("q" + i + (cm ? "c" : ""), questionHTML({ i, total: questions.length, temps: quiz.temps || 20, q, foot: foot(), couleurs: cm }));
     if (fresh) {
       if (!T0[i]) { T0[i] = Date.now(); sess.set(k0, String(T0[i])); }
       clearInterval(tick);

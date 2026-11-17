@@ -51,6 +51,10 @@ Après chaque modification de `firestore.rules`, il faut les republier (Firebase
 - Un pseudo est réservé à l'arrivée (document `pseudos/{clé}`) : « Léa », « lea » et « LÉA » sont le même pseudo. L'exclusion d'un joueur libère son pseudo.
 - Si un joueur actualise la page ou perd sa connexion, il retrouve sa place, son score et le chrono de la question en cours (même téléphone, même navigateur).
 
+## Mode « couleurs seulement » (parties projetées)
+
+Dans le salon de l'écran projeté, la case « Couleurs seulement sur les téléphones » (décochée par défaut) change l'écran des joueurs : ni la question ni les réponses n'apparaissent sur le téléphone, seulement 4 gros boutons colorés avec leur forme (▲ ◆ ● ■), comme Kahoot. Les joueurs lisent l'écran projeté et touchent la bonne couleur, ce qui empêche de chercher la réponse sur internet. Sur l'écran projeté, la forme remplace la lettre A/B/C/D pour que les deux écrans correspondent. Le choix est enregistré dans la fiche du quiz (`modeCouleurs`) : aucune modification des règles Firestore n'est nécessaire. Le mode test du créateur reste en affichage normal.
+
 ## Mode test (créateur)
 
 Bouton « Tester » dans l'éditeur et « Tester gratuitement » sur chaque quiz : le créateur joue son quiz sur l'écran téléphone, avec le chrono et les points, et voit la bonne réponse après chaque question. Rien n'est écrit dans Firestore.

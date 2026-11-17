@@ -131,7 +131,7 @@
 </div>
 
 <script type="module">
-import { auth, db, $, esc, COULEURS, LETTRES, fit, points, pseudoKey, loadQuestions, savePublicQuestions, ADMIN_WHATSAPP, PRIX, MAX_QUESTIONS, MAX_PLAYERS, ADMIN_EMAIL,
+import { auth, db, $, esc, COULEURS, LETTRES, FORMES, fit, points, pseudoKey, loadQuestions, savePublicQuestions, ADMIN_WHATSAPP, PRIX, MAX_QUESTIONS, MAX_PLAYERS, ADMIN_EMAIL,
   GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged,
   collection, query, where, orderBy, getDoc, getDocs, addDoc, updateDoc, deleteDoc, writeBatch, setDoc, doc, onSnapshot, serverTimestamp } from "./js/fb.js";
 import { parseQuiz } from "./js/parser.js";
@@ -424,6 +424,9 @@ async function runGame(id) {
   const limit = (quiz.temps || 20) * 1000;
   // Résultats (rang, points) : une seule écriture par question dans la fiche du quiz, au lieu d'une par joueur
   let res = quiz.results || {}, isFull = !!quiz.full;
+  // Mode projection : les téléphones n'affichent que les couleurs. Choisi dans le salon, mémorisé dans la fiche du quiz.
+  let couleurs = !!quiz.modeCouleurs;
+  const mark = (k) => (couleurs ? FORMES[k] : LETTRES[k]);
   let phase = quiz.phase || "lobby", idx = quiz.qIndex ?? -1, players = [], qStartSrv = null, qStartLocal = Date.now(), timerH = null, built = null;
 
   onSnapshot(qref, (s) => { const d = s.data(); if (d?.qStart?.toMillis) qStartSrv = d.qStart.toMillis(); });
@@ -463,10 +466,16 @@ async function runGame(id) {
           <div style="margin:18px auto;width:216px;background:#fff;padding:8px;border-radius:12px" id="qr"></div>
           <div class="chips" id="chips" style="justify-content:center"></div>
           <p class="muted" id="cnt"></p>
+          <label class="modebox"><input type="checkbox" id="cm" ${couleurs ? "checked" : ""}><span><b>Couleurs seulement sur les téléphones</b><small>Les joueurs ne voient ni la question ni les réponses sur leur téléphone, seulement les 4 couleurs. Pour les parties projetées sur un écran, afin d'éviter la triche.</small></span></label>
           <p><button id="start" class="ok" style="font-size:1.4rem;padding:18px 40px">Démarrer</button></p>
           <p><a class="muted" href="host">← Mes quiz</a></p></div>`;
         if (window.QRCode) new QRCode($("#qr"), { text: url, width: 200, height: 200 });
         $("#start").onclick = () => startQuestion(0);
+        $("#cm").onchange = (e) => {
+          const v = e.target.checked;
+          couleurs = v;
+          updateDoc(qref, { modeCouleurs: v }).catch((err) => { console.error(err); couleurs = !v; e.target.checked = !v; });
+        };
       }
       $("#chips").innerHTML = players.map((p) => `<span class="chip">${esc(p.pseudo)}<button data-k="${p.id}" title="Exclure">✕</button></span>`).join("") || `<span class="muted">En attente des joueurs…</span>`;
       $("#chips").querySelectorAll("[data-k]").forEach((b) => b.onclick = () => {
@@ -488,7 +497,7 @@ async function runGame(id) {
         <div class="shead"><span class="pill">Question ${idx + 1}/${questions.length}</span><div class="timer" id="tm">${Math.max(0, Math.ceil((limit - used) / 1000))}</div><span class="pill" id="nr">${nbRep()}/${players.length} réponses</span></div>
         <div class="tbar"><i id="tb" style="width:${Math.max(0, 100 - (used / limit) * 100)}%"></i></div>
         <div class="qbox host ${fit(q.texte, 80, 140)}">${esc(q.texte)}</div>
-        <div class="${grid}" data-n="${q.choix.length}">${tiles((c, k) => `<div class="choice ${COULEURS[k]}"><small>${LETTRES[k]}</small><span class="ct">${esc(c)}</span></div>`)}</div>
+        <div class="${grid}" data-n="${q.choix.length}">${tiles((c, k) => `<div class="choice ${COULEURS[k]}"><small class="${couleurs ? "fm" : ""}">${mark(k)}</small><span class="ct">${esc(c)}</span></div>`)}</div>
         <div class="center"><button id="skip" class="sec sm" type="button">Terminer la question</button></div></div>`;
       $("#skip").onclick = endQuestion;
       return;
@@ -499,7 +508,7 @@ async function runGame(id) {
       g.innerHTML = `<div class="stage">
         <div class="shead"><span class="pill">Question ${idx + 1}/${questions.length}</span><span class="pill">${nbRep()}/${players.length} réponses</span></div>
         <div class="qbox host ${fit(q.texte, 80, 140)}">${esc(q.texte)}</div>
-        <div class="${grid}" data-n="${q.choix.length}">${tiles((c, k) => `<div class="choice ${COULEURS[k]} ${k === bonne ? "right" : "dim"}"><small>${k === bonne ? "✓" : LETTRES[k]}</small><span class="ct">${esc(c)}</span><b class="cnt">${cnt[k]}</b></div>`)}</div>
+        <div class="${grid}" data-n="${q.choix.length}">${tiles((c, k) => `<div class="choice ${COULEURS[k]} ${k === bonne ? "right" : "dim"}"><small class="${couleurs ? "fm" : ""}">${k === bonne ? "✓" : mark(k)}</small><span class="ct">${esc(c)}</span><b class="cnt">${cnt[k]}</b></div>`)}</div>
         <div class="center"><button id="lb" class="cta" type="button">Classement →</button></div></div>`;
       $("#lb").onclick = showLeaderboard;
       return;

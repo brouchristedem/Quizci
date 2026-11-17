@@ -44,7 +44,7 @@ export function retry(fn, { ms = 12000, tries = 2 } = {}) {
   return go();
 }
 // Utilitaires partagés (définis dans util.js, ré-exportés ici pour les imports existants)
-export { $, esc, COULEURS, LETTRES, fit, ord, fmt, points, pseudoKey } from "./util.js";
+export { $, esc, COULEURS, LETTRES, FORMES, NOMS_COULEURS, fit, ord, fmt, points, pseudoKey } from "./util.js";
 
 // Les questions (sans les bonnes réponses) sont lues en UN seul document : 2 lectures par joueur au lieu de 31.
 // Anciens quiz : repli sur la sous-collection « questions ».
